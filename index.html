@@ -1,419 +1,372 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Middlegame Chess Trainer - Stockfish</title>
-<style>
-  body {
-    font-family: Arial, sans-serif;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 20px;
-  }
-  #board-container {
-    position: relative;
-    width: 480px;
-    height: 480px;
-    margin-bottom: 10px;
-  }
-  #board {
-    width: 480px;
-    height: 480px;
-  }
-  #arrowCanvas {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 480px;
-    height: 480px;
-    pointer-events: none;
-  }
-  #controls {
-    margin-bottom: 10px;
-  }
-  button {
-    margin: 2px;
-  }
-  #moveList {
-    max-height: 150px;
-    overflow-y: auto;
-    border: 1px solid #ccc;
-    width: 480px;
-    padding: 5px;
-    margin-bottom: 10px;
-    font-size: 14px;
-  }
-  #result {
-    font-size: 20px;
-    font-weight: bold;
-    margin-top: 10px;
-    color: green;
-  }
-  .highlight-square {
-    box-shadow: inset 0 0 0 3px yellow;
-  }
-</style>
-<link rel="stylesheet" href="https://unpkg.com/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+  <meta charset="UTF-8">
+  <title>Neutral Middlegame Trainer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f5f5f5;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+    #container {
+      max-width: 960px;
+      width: 100%;
+      margin: 20px;
+      background: #fff;
+      border-radius: 6px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    h1 {
+      margin-top: 0;
+      text-align: center;
+    }
+    .screen {
+      display: none;
+    }
+    .screen.active {
+      display: block;
+    }
+    .form-row {
+      margin-bottom: 12px;
+    }
+    label {
+      display: inline-block;
+      min-width: 120px;
+    }
+    select, button {
+      padding: 6px 10px;
+      font-size: 14px;
+    }
+    #board {
+      width: 480px;
+      max-width: 100%;
+      margin: 10px auto;
+    }
+    #status, #fenDisplay, #info {
+      margin-top: 8px;
+      text-align: center;
+      font-size: 14px;
+      word-wrap: break-word;
+    }
+    #controls {
+      margin-top: 10px;
+      text-align: center;
+    }
+    #controls button {
+      margin: 4px;
+    }
+    .small {
+      font-size: 12px;
+      color: #555;
+      text-align: center;
+      margin-top: 6px;
+    }
+    .error {
+      color: #b00020;
+    }
+  </style>
+
+  <!-- Chessboard.js and dependencies -->
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/chessboard.js/1.0.0/chessboard-1.0.0.min.css"
+        integrity="sha512-VwGmM0fUuFf9Z6v7VGd/POvXB48dF1y5iVr3S9r2Kk94DqO0HXnqT1pEPkNfciqYq7F5kPNgF4buJq3QIV9Wng=="
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
 </head>
 <body>
+<div id="container">
+  <h1>Neutral Middlegame Trainer</h1>
 
-<h2>Middlegame Chess Trainer - Stockfish 10 Moves</h2>
+  <!-- Home screen -->
+  <div id="homeScreen" class="screen active">
+    <p style="text-align:center;">
+      Choose your side, difficulty, then generate a neutral middlegame and play against the computer.
+    </p>
+    <div class="form-row" style="text-align:center;">
+      <label for="sideSelect">Play as:</label>
+      <select id="sideSelect">
+        <option value="white">White</option>
+        <option value="black">Black</option>
+      </select>
+    </div>
+    <div class="form-row" style="text-align:center;">
+      <label for="difficultySelect">Difficulty:</label>
+      <select id="difficultySelect">
+        <option value="easy">Easy</option>
+        <option value="normal" selected>Normal</option>
+        <option value="hard">Hard</option>
+      </select>
+    </div>
+    <div class="form-row" style="text-align:center;">
+      <button id="generateBtn">Generate Middlegame</button>
+    </div>
+    <p class="small">
+      Positions are neutral middlegames around move 12, either from practical games or engine play.
+    </p>
+    <p id="engineStatus" class="small error"></p>
+  </div>
 
-<div id="controls">
-  <button id="generateStockfishBtn">Generate Middlegame (10 Moves)</button>
-  <button id="resignBtn" style="display:none;">Resign</button>
-  <label>Side:
-    <select id="sideSelect">
-      <option value="w">White</option>
-      <option value="b">Black</option>
-    </select>
-  </label>
-  <label>Difficulty:
-    <select id="levelSelect">
-      <option value="1">Easy</option>
-      <option value="5">Medium</option>
-      <option value="10">Hard</option>
-      <option value="20">Expert</option>
-    </select>
-  </label>
-  <button id="analyzeBtn" style="display:none;">Analyze Game</button>
+  <!-- Game screen -->
+  <div id="gameScreen" class="screen">
+    <div id="board"></div>
+    <div id="status"></div>
+    <div id="fenDisplay" class="small"></div>
+    <div id="info" class="small"></div>
+    <div id="controls">
+      <button id="restartBtn">Restart Position</button>
+      <button id="newPosBtn">New Middlegame</button>
+      <button id="homeBtn">Return Home</button>
+    </div>
+  </div>
 </div>
 
-<div id="board-container">
-  <div id="board"></div>
-  <canvas id="arrowCanvas" width="480" height="480"></canvas>
-</div>
+<!-- Scripts at end for faster load -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"
+        integrity="sha512-v2CJ7UaYy4JwqLDIrZUI/4hqeoQieOmAZNXBeQyjo21dadnwR+8ZA2sWyDlzOHi0zG2J4HNc6iYG5YkN6aI2mQ=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.13.4/chess.min.js"
+        integrity="sha512-+P35IRt+J7hCGw1aC2ACGpDM0Z7p0Vg8J0Tf5VDp3lJydwh7idXJCQnww/bn4fq+FeuYIfdWst2WvO+gB7E9Gg=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard.js/1.0.0/chessboard-1.0.0.min.js"
+        integrity="sha512-ZN4Sxw+J+Y+kM9G4rotv+hJVKx038kuhSpxq7K2Ae3lJgfA0T4Af4u2xSHKRhsfHH5pTZjexvG5pINPWNv3S3g=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
-<div id="moveList"></div>
-<div id="result"></div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.13.5/chess.min.js"></script>
-<script src="https://unpkg.com/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+<!-- Stockfish (browser build) from jsDelivr; suitable for GitHub Pages -->
+<script src="https://cdn.jsdelivr.net/gh/niklasf/stockfish.wasm/stockfish.js"></script>
 
 <script>
-// --------- Variables ---------
-let board, game;
-let stockfish;
-let userColor = 'w';
-let arrows = [];
-let isRightMouseDown = false;
-let arrowStart = null;
+  // Neutral middlegame FENs around move 12 (balanced positions)
+  const NEUTRAL_MIDDLEGAMES = [
+    "r1bq1rk1/1pp1bppp/p1np1n2/1B2p3/3PP3/2N2N2/PPP2PPP/R1BQ1RK1 w - - 0 10",
+    "r1bq1rk1/pp1n1pbp/2p1p1p1/3pP3/3P1P2/2NBB3/PP3NPP/R2Q1RK1 b - - 0 11",
+    "r1bq1rk1/1p2bppp/p1n1pn2/2pp4/3P4/1PN1PN2/PB3PPP/R2Q1RK1 w - - 0 11"
+  ];
 
-const canvas = document.getElementById('arrowCanvas');
-const ctx = canvas.getContext('2d');
-const boardSize = 480;
-const squareSize = boardSize / 8;
-const resultEl = document.getElementById('result');
-const moveListEl = document.getElementById('moveList');
+  let game = null;
+  let board = null;
+  let engine = null;
+  let engineReady = false;
+  let startingFen = null;
+  let playerColor = "white";
+  let difficulty = "normal";
 
-// --------- Helper Functions ---------
-function squareToCoords(sq) {
-  const file = sq.charCodeAt(0) - 'a'.charCodeAt(0);
-  const rank = 8 - parseInt(sq[1], 10);
-  return {
-    x: file * squareSize + squareSize / 2,
-    y: rank * squareSize + squareSize / 2
-  };
-}
-
-function drawArrows() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  arrows.forEach(a => {
-    const from = squareToCoords(a.from);
-    const to = squareToCoords(a.to);
-    drawArrow(from.x, from.y, to.x, to.y);
-  });
-}
-
-function drawArrow(fromX, fromY, toX, toY) {
-  const headlen = 10;
-  const dx = toX - fromX;
-  const dy = toY - fromY;
-  const angle = Math.atan2(dy, dx);
-  ctx.strokeStyle = 'red';
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(fromX, fromY);
-  ctx.lineTo(toX, toY);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(toX, toY);
-  ctx.lineTo(
-    toX - headlen * Math.cos(angle - Math.PI / 6),
-    toY - headlen * Math.sin(angle - Math.PI / 6)
-  );
-  ctx.lineTo(
-    toX - headlen * Math.cos(angle + Math.PI / 6),
-    toY - headlen * Math.sin(angle + Math.PI / 6)
-  );
-  ctx.closePath();
-  ctx.fillStyle = 'red';
-  ctx.fill();
-}
-
-function clearHighlights() {
-  const squares = document.querySelectorAll('#board .square-55d63');
-  squares.forEach(sq => {
-    sq.classList.remove('highlight-square');
-  });
-}
-
-function highlightMove(from, to) {
-  clearHighlights();
-  const fromEl = document.querySelector('.square-' + from);
-  const toEl = document.querySelector('.square-' + to);
-  if (fromEl) fromEl.classList.add('highlight-square');
-  if (toEl) toEl.classList.add('highlight-square');
-}
-
-// --------- Init Functions ---------
-function initStockfish() {
-  // Use Stockfish WASM build from jsDelivr
-  stockfish = new Worker('https://cdn.jsdelivr.net/gh/niklasf/stockfish.js/stockfish.js');
-}
-
-function initBoard() {
-  game = new Chess();
-  board = Chessboard('board', {
-    draggable: true,
-    position: 'start',
-    orientation: 'white',
-    onDragStart: onDragStart,
-    onDrop: onDrop,
-    onSnapEnd: onSnapEnd
-  });
-
-  const boardEl = document.getElementById('board-container');
-
-  boardEl.addEventListener('contextmenu', e => e.preventDefault());
-
-  boardEl.addEventListener('mousedown', e => {
-    if (e.button === 2) {
-      isRightMouseDown = true;
-      const sqClass = e.target.className.split(' ').find(c => c.indexOf('square-') === 0);
-      if (sqClass) {
-        arrowStart = sqClass.replace('square-', '');
-      }
-    }
-  });
-
-  boardEl.addEventListener('mouseup', e => {
-    if (isRightMouseDown && arrowStart) {
-      const sqClass = e.target.className.split(' ').find(c => c.indexOf('square-') === 0);
-      if (sqClass) {
-        const sq = sqClass.replace('square-', '');
-        if (sq && arrowStart !== sq) {
-          const index = arrows.findIndex(a => a.from === arrowStart && a.to === sq);
-          if (index !== -1) {
-            arrows.splice(index, 1);
-          } else {
-            arrows.push({ from: arrowStart, to: sq });
-          }
-          drawArrows();
-        }
-      }
-    }
-    isRightMouseDown = false;
-    arrowStart = null;
-  });
-}
-
-// --------- Chessboard Logic ---------
-function onDragStart(source, piece) {
-  // block moving pieces when game over
-  if (game.game_over()) return false;
-
-  // only allow moves for the side to move AND the user's chosen color
-  const turn = game.turn();
-  if (turn !== userColor) return false;
-
-  if ((turn === 'w' && piece.search(/^b/) !== -1) ||
-      (turn === 'b' && piece.search(/^w/) !== -1)) {
-    return false;
+  function showScreen(id) {
+    document.getElementById("homeScreen").classList.remove("active");
+    document.getElementById("gameScreen").classList.remove("active");
+    document.getElementById(id).classList.add("active");
   }
-}
 
-function onDrop(source, target) {
-  clearHighlights();
-  const move = game.move({ from: source, to: target, promotion: 'q' });
-  if (!move) return 'snapback';
-
-  updateMoveList();
-  board.position(game.fen());
-  checkGameOver();
-
-  if (!game.game_over()) {
-    // Now it's engine's turn
-    setTimeout(makeStockfishMove, 200);
+  function pickRandomFen() {
+    const idx = Math.floor(Math.random() * NEUTRAL_MIDDLEGAMES.length);
+    return NEUTRAL_MIDDLEGAMES[idx];
   }
-}
 
-function onSnapEnd() {
-  board.position(game.fen());
-}
+  function updateStatus() {
+    if (!game) return;
+    let status = "";
+    let moveColor = game.turn() === "w" ? "White" : "Black";
 
-function updateMoveList() {
-  const history = game.history({ verbose: true });
-  moveListEl.innerHTML = '';
-  history.forEach((m, i) => {
-    const moveEl = document.createElement('div');
-    const moveNumber = Math.floor(i / 2) + 1;
-    const prefix = (i % 2 === 0) ? moveNumber + '. ' : moveNumber + '... ';
-    moveEl.innerText = prefix + m.san;
-    moveEl.style.cursor = 'pointer';
-    moveEl.addEventListener('click', () => highlightMove(m.from, m.to));
-    moveListEl.appendChild(moveEl);
-  });
-}
-
-function engineOnMessageForPlay(e) {
-  const line = e.data;
-  if (typeof line !== 'string') return;
-  if (line.startsWith('bestmove')) {
-    const parts = line.split(' ');
-    const moveStr = parts[1];
-    if (moveStr === '(none)' || moveStr === 'none') return;
-    const from = moveStr.slice(0, 2);
-    const to = moveStr.slice(2, 4);
-    game.move({ from: from, to: to, promotion: 'q' });
-    board.position(game.fen());
-    updateMoveList();
-    checkGameOver();
-  }
-}
-
-function makeStockfishMove() {
-  if (game.game_over()) return;
-
-  const level = parseInt(document.getElementById('levelSelect').value, 10);
-
-  stockfish.onmessage = engineOnMessageForPlay;
-  stockfish.postMessage('ucinewgame');
-  stockfish.postMessage('isready');
-  stockfish.postMessage('position fen ' + game.fen());
-  stockfish.postMessage('setoption name Skill Level value ' + level);
-  stockfish.postMessage('go depth 10');
-}
-
-// --------- Game Over and Resign ---------
-function checkGameOver() {
-  if (game.game_over()) {
-    let resultText = '';
     if (game.in_checkmate()) {
-      // If it's user's turn and game is in checkmate, user lost
-      resultText = (game.turn() === userColor) ? 'Defeat by Checkmate!' : 'Victory by Checkmate!';
-    } else if (game.in_stalemate()) {
-      resultText = 'Draw by Stalemate!';
-    } else if (game.insufficient_material()) {
-      resultText = 'Draw by Insufficient Material!';
-    } else if (game.in_threefold_repetition()) {
-      resultText = 'Draw by Threefold Repetition!';
+      status = "Game over, " + (moveColor === "White" ? "Black" : "White") + " wins by checkmate.";
+    } else if (game.in_draw()) {
+      status = "Game over, drawn position.";
     } else {
-      resultText = 'Game Over!';
+      status = moveColor + " to move.";
+      if (game.in_check()) {
+        status += " " + moveColor + " is in check.";
+      }
     }
-    resultEl.innerText = resultText;
-    document.getElementById('analyzeBtn').style.display = 'inline-block';
-    document.getElementById('resignBtn').style.display = 'none';
+
+    document.getElementById("status").textContent = status;
+    document.getElementById("fenDisplay").textContent = "FEN: " + game.fen();
   }
-}
 
-function resignGame() {
-  if (game.game_over()) return;
-  resultEl.innerText = 'You Resigned! Defeat.';
-  document.getElementById('analyzeBtn').style.display = 'inline-block';
-  document.getElementById('resignBtn').style.display = 'none';
-}
+  function difficultyToMoveTimeMs(level) {
+    if (level === "easy") return 300;
+    if (level === "hard") return 2000;
+    return 800;
+  }
 
-// --------- Generate Stockfish Middlegame ---------
-function generateStockfishMiddlegame() {
-  arrows = [];
-  drawArrows();
-  resultEl.innerText = '';
-  clearHighlights();
-  document.getElementById('analyzeBtn').style.display = 'none';
-  document.getElementById('resignBtn').style.display = 'inline-block';
+  // Initialize Stockfish as a Web Worker using the global Stockfish script
+  function initEngine(callback) {
+    const statusEl = document.getElementById("engineStatus");
+    statusEl.textContent = "";
 
-  // Reset game and start from initial position
-  game.reset();
+    try {
+      // The stockfish.js we included exposes a factory function
+      engine = new Worker(URL.createObjectURL(new Blob(
+        ["importScripts('https://cdn.jsdelivr.net/gh/niklasf/stockfish.wasm/stockfish.js');"],
+        { type: "application/javascript" }
+      )));
+    } catch (e) {
+      statusEl.textContent = "Could not start Stockfish engine: " + e.message;
+      return;
+    }
 
-  // Set orientation based on chosen side
-  const side = document.getElementById('sideSelect').value;
-  userColor = side;
-  board.orientation(side === 'w' ? 'white' : 'black');
+    engineReady = false;
 
-  updateMoveList();
-  board.position(game.fen());
+    engine.onmessage = function (event) {
+      const line = typeof event.data === "string" ? event.data : "";
+      if (line.indexOf("uciok") !== -1) {
+        engineReady = true;
+        if (typeof callback === "function") callback();
+      }
+      if (line.startsWith("bestmove")) {
+        const parts = line.split(" ");
+        const moveStr = parts[1];
+        applyEngineMove(moveStr);
+      }
+    };
 
-  const movesToGenerate = 10;
-  let generatedMoves = 0;
+    engine.onerror = function (e) {
+      statusEl.textContent = "Engine error: " + e.message;
+    };
 
-  function genListener(event) {
-    const line = event.data;
-    if (typeof line !== 'string') return;
-    if (line.startsWith('bestmove')) {
-      const moveStr = line.split(' ')[1];
-      if (moveStr === '(none)' || moveStr === 'none') {
-        stockfish.removeEventListener('message', genListener);
+    engine.postMessage("uci");
+  }
+
+  function sendEngineCommand(cmd) {
+    if (!engine) return;
+    engine.postMessage(cmd);
+  }
+
+  function applyEngineMove(uciMove) {
+    if (!uciMove || uciMove === "(none)" || !game) return;
+
+    const move = game.move({
+      from: uciMove.substring(0, 2),
+      to: uciMove.substring(2, 4),
+      promotion: uciMove.length > 4 ? uciMove.substring(4, 5) : "q"
+    });
+
+    if (move === null) {
+      return;
+    }
+
+    board.position(game.fen());
+    updateStatus();
+  }
+
+  function makeEngineMove() {
+    if (!engineReady || !game) return;
+
+    const timeMs = difficultyToMoveTimeMs(difficulty);
+    const fen = game.fen();
+
+    sendEngineCommand("ucinewgame");
+    sendEngineCommand("position fen " + fen);
+    sendEngineCommand("go movetime " + timeMs);
+  }
+
+  function onDragStart(source, piece, position, orientation) {
+    if (!game || game.game_over()) return false;
+
+    if (playerColor === "white" && piece.search(/^b/) !== -1) return false;
+    if (playerColor === "black" && piece.search(/^w/) !== -1) return false;
+
+    if ((game.turn() === "w" && playerColor !== "white") ||
+        (game.turn() === "b" && playerColor !== "black")) {
+      return false;
+    }
+  }
+
+  function onDrop(source, target) {
+    if (!game) return "snapback";
+
+    const move = game.move({
+      from: source,
+      to: target,
+      promotion: "q"
+    });
+
+    if (move === null) return "snapback";
+
+    updateStatus();
+
+    if (!game.game_over()) {
+      window.setTimeout(makeEngineMove, 250);
+    }
+  }
+
+  function onSnapEnd() {
+    if (!game) return;
+    board.position(game.fen());
+  }
+
+  function startNewGame(fromFen) {
+    startingFen = fromFen || pickRandomFen();
+    game = new Chess(startingFen);
+
+    const orientation = playerColor === "white" ? "white" : "black";
+
+    if (!board) {
+      board = Chessboard("board", {
+        draggable: true,
+        position: startingFen,
+        orientation: orientation,
+        onDragStart: onDragStart,
+        onDrop: onDrop,
+        onSnapEnd: onSnapEnd
+      });
+    } else {
+      board.orientation(orientation);
+      board.position(startingFen, false);
+    }
+
+    updateStatus();
+
+    const info = document.getElementById("info");
+    info.textContent =
+      "Playing as " + playerColor + " | Difficulty: " + difficulty.charAt(0).toUpperCase() + difficulty.slice(1) +
+      " | Neutral middlegame (≈12 moves).";
+
+    if ((game.turn() === "w" && playerColor === "black") ||
+        (game.turn() === "b" && playerColor === "white")) {
+      window.setTimeout(makeEngineMove, 400);
+    }
+  }
+
+  document.getElementById("generateBtn").addEventListener("click", function () {
+    playerColor = document.getElementById("sideSelect").value;
+    difficulty = document.getElementById("difficultySelect").value;
+
+    const startPlay = function () {
+      if (!engineReady) {
+        document.getElementById("engineStatus").textContent = "Engine not ready.";
         return;
       }
-      const from = moveStr.slice(0, 2);
-      const to = moveStr.slice(2, 4);
-      game.move({ from: from, to: to, promotion: 'q' });
-      board.position(game.fen());
-      updateMoveList();
-      generatedMoves++;
-      if (generatedMoves < movesToGenerate) {
-        stockfish.postMessage('position fen ' + game.fen());
-        stockfish.postMessage('setoption name Skill Level value 10');
-        stockfish.postMessage('go depth 6');
-      } else {
-        stockfish.removeEventListener('message', genListener);
-        // After engine generates 10 plies, it's user's turn
-      }
+      startNewGame(pickRandomFen());
+      showScreen("gameScreen");
+    };
+
+    if (!engine) {
+      initEngine(startPlay);
+    } else if (engineReady) {
+      startPlay();
+    } else {
+      document.getElementById("engineStatus").textContent = "Engine initialising, please wait a moment and try again.";
     }
-  }
+  });
 
-  stockfish.addEventListener('message', genListener);
-  stockfish.postMessage('ucinewgame');
-  stockfish.postMessage('isready');
-  stockfish.postMessage('position fen ' + game.fen());
-  stockfish.postMessage('setoption name Skill Level value 10');
-  stockfish.postMessage('go depth 6');
-}
+  document.getElementById("restartBtn").addEventListener("click", function () {
+    if (!startingFen) return;
+    startNewGame(startingFen);
+  });
 
-// --------- Analyze Current Position ---------
-function analyzeCurrentPosition() {
-  if (!stockfish) return;
+  document.getElementById("newPosBtn").addEventListener("click", function () {
+    startNewGame(pickRandomFen());
+  });
 
-  stockfish.onmessage = function(e) {
-    const line = e.data;
-    if (typeof line !== 'string') return;
-    if (line.startsWith('bestmove')) {
-      const best = line.split(' ')[1];
-      alert('Best move: ' + best);
-    }
-  };
-
-  stockfish.postMessage('ucinewgame');
-  stockfish.postMessage('isready');
-  stockfish.postMessage('position fen ' + game.fen());
-  stockfish.postMessage('go depth 15');
-}
-
-// --------- Event Listeners ---------
-document.getElementById('generateStockfishBtn').addEventListener('click', generateStockfishMiddlegame);
-document.getElementById('resignBtn').addEventListener('click', resignGame);
-document.getElementById('sideSelect').addEventListener('change', e => {
-  userColor = e.target.value;
-  board.orientation(userColor === 'w' ? 'white' : 'black');
-});
-document.getElementById('analyzeBtn').addEventListener('click', analyzeCurrentPosition);
-
-// --------- Init ---------
-initStockfish();
-initBoard();
+  document.getElementById("homeBtn").addEventListener("click", function () {
+    showScreen("homeScreen");
+  });
 </script>
-
 </body>
 </html>
