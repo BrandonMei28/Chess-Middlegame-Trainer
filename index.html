@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Neutral Middlegame Trainer</title>
+  <title>Middlegame Trainer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
     body {
@@ -82,12 +82,12 @@
 </head>
 <body>
 <div id="container">
-  <h1>Neutral Middlegame Trainer</h1>
+  <h1>Middlegame Trainer</h1>
 
   <!-- Home screen -->
   <div id="homeScreen" class="screen active">
     <p style="text-align:center;">
-      Choose your side, difficulty, then generate a neutral middlegame and play against the computer.
+      Generate a neutral middlegame and play against the computer!
     </p>
     <div class="form-row" style="text-align:center;">
       <label for="sideSelect">Play as:</label>
@@ -137,9 +137,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard.js/1.0.0/chessboard-1.0.0.min.js"
         integrity="sha512-ZN4Sxw+J+Y+kM9G4rotv+hJVKx038kuhSpxq7K2Ae3lJgfA0T4Af4u2xSHKRhsfHH5pTZjexvG5pINPWNv3S3g=="
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-
-<!-- Stockfish (browser build) from jsDelivr; suitable for GitHub Pages -->
-<script src="https://cdn.jsdelivr.net/gh/niklasf/stockfish.wasm/stockfish.js"></script>
 
 <script>
   // Neutral middlegame FENs around move 12 (balanced positions)
@@ -194,17 +191,14 @@
     return 800;
   }
 
-  // Initialize Stockfish as a Web Worker using the global Stockfish script
+  // Initialize Stockfish from a local worker script
   function initEngine(callback) {
     const statusEl = document.getElementById("engineStatus");
     statusEl.textContent = "";
 
     try {
-      // The stockfish.js we included exposes a factory function
-      engine = new Worker(URL.createObjectURL(new Blob(
-        ["importScripts('https://cdn.jsdelivr.net/gh/niklasf/stockfish.wasm/stockfish.js');"],
-        { type: "application/javascript" }
-      )));
+      // stockfish.js must be in the same repo, served by GitHub Pages
+      engine = new Worker("stockfish.js");
     } catch (e) {
       statusEl.textContent = "Could not start Stockfish engine: " + e.message;
       return;
@@ -351,7 +345,8 @@
     } else if (engineReady) {
       startPlay();
     } else {
-      document.getElementById("engineStatus").textContent = "Engine initialising, please wait a moment and try again.";
+      document.getElementById("engineStatus").textContent =
+        "Engine initialising, please wait a moment and try again.";
     }
   });
 
