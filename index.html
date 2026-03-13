@@ -173,16 +173,18 @@ h1 span { color:var(--gold); font-style:italic; }
   position:fixed; pointer-events:none; z-index:9999; display:none;
   width:  calc(var(--board-size) / 8);
   height: calc(var(--board-size) / 8);
-  transform:translate(-50%,-50%); opacity:.95;
-  will-change:left,top; /* GPU-accelerate ghost movement on mobile */
+  /* positioned via transform only — left/top set to 0, translate does the work */
+  left:0; top:0;
+  transform:translate(0,0);
+  opacity:.95;
+  will-change:transform;
 }
 #drag-ghost svg { width:100%; height:100%; display:block; }
-/* On touch devices make the ghost 1.4× larger so it's visible above the finger */
+/* On touch: larger piece, offset upward so finger doesn't cover it */
 @media (pointer:coarse) {
   #drag-ghost {
-    width:  calc(var(--board-size) / 8 * 1.4);
-    height: calc(var(--board-size) / 8 * 1.4);
-    transform:translate(-50%,-80%); /* shift up so piece shows above fingertip */
+    width:  calc(var(--board-size) / 8 * 1.45);
+    height: calc(var(--board-size) / 8 * 1.45);
   }
 }
 
@@ -1219,8 +1221,8 @@ function renderBrowseBoard(){
 
       // Clicks in browse mode: click anywhere non-history exits.
       // On touch, use touchend to exit and prevent the subsequent synthetic click.
-      div.addEventListener('touchend',e=>{e.preventDefault();exitBrowseMode();},{passive:false});
-      div.addEventListener('click',e=>{if(lastWasTouch){lastWasTouch=false;return;}exitBrowseMode();});
+      div.addEventListener('touchend',e=>{e.preventDefault();suppressNextClick=true;exitBrowseMode();},{passive:false});
+      div.addEventListener('click',e=>{if(suppressNextClick){suppressNextClick=false;return;}exitBrowseMode();});
       board.appendChild(div);
     }
   }
@@ -1326,100 +1328,162 @@ function renderBoard(){
 //  DRAG STATE
 // ════════════════════════════════════════════════════════════
 let dragState=null;
-// Track whether the last interaction was a touch, to suppress
-// the synthetic 'click' Safari fires after touchend
-let lastWasTouch=false;
+// Suppress Safari's synthetic 'click' that fires ~300ms after touchend
+let suppressNextClick=false;
+
+// Move ghost via transform (not left/top) for reliable Safari rendering
+function _moveGhost(x, y, isTouch){
+  const ghost=document.getElementById('drag-ghost');
+  if(!ghost)return;
+  // On touch: offset upward by half the ghost height so piece shows above finger
+  const w=ghost.offsetWidth, h=ghost.offsetHeight;
+  const ox = isTouch ? -w/2 : -w/2;
+  const oy = isTouch ? -h*0.85 : -h/2;
+  ghost.style.transform=`translate(${x+ox}px,${y+oy}px)`;
+}
+
+// Compute which square name is under a client coordinate using board geometry.
+// More reliable than elementFromPoint on Safari (avoids overlay/ghost issues).
+function sqNameFromCoords(clientX, clientY){
+  const boardEl=document.getElementById('chessboard');
+  if(!boardEl)return null;
+  const rect=boardEl.getBoundingClientRect();
+  const relX=clientX-rect.left, relY=clientY-rect.top;
+  if(relX<0||relY<0||relX>=rect.width||relY>=rect.height)return null;
+  const col=Math.floor(relX/(rect.width/8));
+  const row=Math.floor(relY/(rect.height/8));
+  const flipped=playerColor==='black';
+  const file=flipped?7-col:col;
+  const rank=flipped?row:7-row;
+  return FILES[file]+(rank+1);
+}
 
 function onDragStart(e,name){
-  // Right-click is reserved for arrow drawing — never drag pieces with it
-  if(e.button===2)return;
+  if(e.button===2)return; // right-click = arrow drawing only
 
   const isTouch=e.type==='touchstart';
-
-  // Always prevent default on touchstart over the board so Safari doesn't
-  // scroll, zoom, or fire a delayed synthetic click
   if(isTouch){
-    e.preventDefault();
-    lastWasTouch=true;
+    e.preventDefault(); // must be called synchronously to work on Safari
+    suppressNextClick=true;
   }
 
-  if(isBrowsing()){exitBrowseMode();return;}
+  if(isBrowsing()){
+    if(isTouch) exitBrowseMode();
+    return;
+  }
   if(isThinking||pendingPromo||game.isGameOver())return;
   const playerTurn=playerColor==='white'?W:B;
   if(game.turn!==playerTurn)return;
-  const p=game.board[parseSq(name)];
-  if(!p||p.c!==playerTurn)return;
+  const piece=game.board[parseSq(name)];
+  if(!piece||piece.c!==playerTurn)return;
 
-  const startPos=getEventPos(e);
+  const pos=getEventPos(e);
+
+  // On touch: start drag immediately (no threshold) so ghost tracks finger from the start
+  // On mouse: use a small threshold so accidental micro-moves don't trigger drag
+  const startDragging=isTouch; // immediately for touch
+
   dragState={
     fromName:name,
-    startPos,
-    currentPos:{...startPos},
-    isDragging:false,
+    startPos:{...pos},
     isTouch,
+    isDragging:startDragging,
+    rafId:null,
+    pendingX:pos.x,
+    pendingY:pos.y,
   };
 
-  if(isTouch){
-    document.addEventListener('touchmove', onDragMove,{passive:false});
-    document.addEventListener('touchend',  onDragEnd, {passive:false});
-    document.addEventListener('touchcancel',onDragCancel,{passive:false});
-  }else{
-    document.addEventListener('mousemove', onDragMove,{passive:false});
-    document.addEventListener('mouseup',   onDragEnd, {passive:false});
+  if(startDragging){
+    // Show ghost immediately at touch position
+    _showGhost(name, pos.x, pos.y, isTouch);
+    const originEl=document.querySelector(`[data-sq="${name}"]`);
+    if(originEl)originEl.classList.add('dragging-from');
+    selectSq(name);
   }
+
+  if(isTouch){
+    document.addEventListener('touchmove',  onDragMove,   {passive:false});
+    document.addEventListener('touchend',   onDragEnd,    {passive:false});
+    document.addEventListener('touchcancel',onDragCancel, {passive:false});
+  }else{
+    document.addEventListener('mousemove',  onDragMove,   {passive:false});
+    document.addEventListener('mouseup',    onDragEnd,    {passive:false});
+  }
+}
+
+function _showGhost(name, x, y, isTouch){
+  const ghost=document.getElementById('drag-ghost');
+  const piece=game.board[parseSq(name)];
+  if(!ghost||!piece)return;
+  ghost.innerHTML=SVG[pieceKey(piece)]||'';
+  ghost.style.display='block';
+  _moveGhost(x, y, isTouch);
 }
 
 function onDragMove(e){
   if(!dragState)return;
-  if(e.type==='touchmove')e.preventDefault();
+  if(e.cancelable)e.preventDefault();
   const pos=getEventPos(e);
-  dragState.currentPos=pos;
+  dragState.pendingX=pos.x;
+  dragState.pendingY=pos.y;
+
   if(!dragState.isDragging){
+    // Mouse-only threshold check
     const dx=pos.x-dragState.startPos.x, dy=pos.y-dragState.startPos.y;
-    // Use a larger threshold on touch so small finger wobbles don't trigger drag
-    const threshold=dragState.isTouch?8:5;
-    if(Math.sqrt(dx*dx+dy*dy)<threshold)return;
+    if(Math.sqrt(dx*dx+dy*dy)<5)return;
     dragState.isDragging=true;
     selectSq(dragState.fromName);
-    const ghost=document.getElementById('drag-ghost');
-    const p=game.board[parseSq(dragState.fromName)];
-    ghost.innerHTML=SVG[pieceKey(p)]||'';
-    ghost.style.display='block';
-    ghost.style.left=pos.x+'px'; ghost.style.top=pos.y+'px';
+    _showGhost(dragState.fromName, pos.x, pos.y, dragState.isTouch);
     const originEl=document.querySelector(`[data-sq="${dragState.fromName}"]`);
     if(originEl)originEl.classList.add('dragging-from');
-  }else{
-    const ghost=document.getElementById('drag-ghost');
-    ghost.style.left=pos.x+'px'; ghost.style.top=pos.y+'px';
+    return;
   }
+
+  // Use requestAnimationFrame to throttle ghost updates — smoother on Safari
+  if(dragState.rafId)cancelAnimationFrame(dragState.rafId);
+  dragState.rafId=requestAnimationFrame(()=>{
+    if(!dragState)return;
+    _moveGhost(dragState.pendingX, dragState.pendingY, dragState.isTouch);
+    dragState.rafId=null;
+  });
 }
 
 function onDragEnd(e){
   if(!dragState)return;
+  if(e.cancelable)e.preventDefault();
   _cleanupDragListeners();
+  if(dragState.rafId)cancelAnimationFrame(dragState.rafId);
+
   const wasDragging=dragState.isDragging;
   const fromName=dragState.fromName;
   const isTouch=dragState.isTouch;
+  const startPos=dragState.startPos;
+
   const ghost=document.getElementById('drag-ghost');
   ghost.style.display='none'; ghost.innerHTML='';
   const originEl=document.querySelector(`[data-sq="${fromName}"]`);
   if(originEl)originEl.classList.remove('dragging-from');
-  const savedDragState=dragState;
   dragState=null;
 
   if(!wasDragging){
-    // It was a tap — handle as a click for touch, but not for mouse
-    // (mouse fires its own 'click' event natively)
-    if(isTouch){
-      // Manually invoke click logic using the start position
-      const tappedSq=squareAtPoint(savedDragState.startPos.x, savedDragState.startPos.y);
-      if(tappedSq)onSquareTap(tappedSq);
-    }
+    // Tap (mouse only — touch never goes through this path since isDragging=true from start)
+    // mouse fires its own native click event, nothing to do here
     return;
   }
 
+  // For touch taps (isDragging=true immediately), check if finger barely moved
   const pos=getEventPos(e);
-  const toName=squareAtPoint(pos.x,pos.y);
+  const dx=pos.x-startPos.x, dy=pos.y-startPos.y;
+  const isTap=isTouch && Math.sqrt(dx*dx+dy*dy)<12;
+
+  if(isTap){
+    // Treat as square tap — re-run tap logic at start square
+    onSquareTap(fromName);
+    return;
+  }
+
+  // Drag release — find target square from geometry
+  const toName=sqNameFromCoords(pos.x, pos.y);
   if(!toName){renderBoard();return;}
   const hit=legalMoves.find(m=>m.to===toName);
   if(hit){
@@ -1430,9 +1494,9 @@ function onDragEnd(e){
 }
 
 function onDragCancel(){
-  // Safari fires touchcancel e.g. when a notification appears mid-drag
   if(!dragState)return;
   _cleanupDragListeners();
+  if(dragState.rafId)cancelAnimationFrame(dragState.rafId);
   const ghost=document.getElementById('drag-ghost');
   ghost.style.display='none'; ghost.innerHTML='';
   const originEl=document.querySelector(`[data-sq="${dragState.fromName}"]`);
@@ -1454,18 +1518,17 @@ function getEventPos(e){
   if(e.changedTouches&&e.changedTouches.length>0)return{x:e.changedTouches[0].clientX,y:e.changedTouches[0].clientY};
   return{x:e.clientX,y:e.clientY};
 }
+
+// Legacy — kept for arrow drawing code compatibility
 function squareAtPoint(x,y){
-  const ghost=document.getElementById('drag-ghost');
-  const prev=ghost.style.display;ghost.style.display='none';
-  const el=document.elementFromPoint(x,y);ghost.style.display=prev;
-  if(!el)return null;const s=el.closest('[data-sq]');return s?s.dataset.sq:null;
+  return sqNameFromCoords(x,y);
 }
 
 // ════════════════════════════════════════════════════════════
-//  CLICK INTERACTION
+//  CLICK / TAP INTERACTION
 // ════════════════════════════════════════════════════════════
 
-// Touch tap — called manually from onDragEnd when it was a tap (not drag)
+// Touch tap — called from onDragEnd when movement was tiny (finger barely moved)
 function onSquareTap(name){
   if(isBrowsing()){exitBrowseMode();return;}
   if(isThinking||pendingPromo||game.isGameOver())return;
@@ -1486,9 +1549,8 @@ function onSquareTap(name){
 }
 
 function onSquareClick(e,name){
-  if(e.button===2)return; // right-click is for arrows only
-  // Suppress the synthetic click Safari fires after touchend
-  if(lastWasTouch){lastWasTouch=false;return;}
+  if(e.button===2)return; // right-click = arrows only
+  if(suppressNextClick){suppressNextClick=false;return;} // swallow Safari synthetic click
   if(isBrowsing()){exitBrowseMode();return;}
   if(isThinking||pendingPromo||game.isGameOver())return;
   const playerTurn=playerColor==='white'?W:B;
