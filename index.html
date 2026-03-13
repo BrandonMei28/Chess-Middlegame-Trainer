@@ -171,22 +171,12 @@ h1 span { color:var(--gold); font-style:italic; }
 /* ── DRAG GHOST ── */
 #drag-ghost {
   position:fixed; pointer-events:none; z-index:9999; display:none;
-  width:  calc(var(--board-size) / 8);
-  height: calc(var(--board-size) / 8);
-  /* positioned via transform only — left/top set to 0, translate does the work */
   left:0; top:0;
   transform:translate(0,0);
   opacity:.95;
   will-change:transform;
 }
 #drag-ghost svg { width:100%; height:100%; display:block; }
-/* On touch: larger piece, offset upward so finger doesn't cover it */
-@media (pointer:coarse) {
-  #drag-ghost {
-    width:  calc(var(--board-size) / 8 * 1.45);
-    height: calc(var(--board-size) / 8 * 1.45);
-  }
-}
 
 /* ── SIDEBAR ── */
 .sidebar { width:205px; display:flex; flex-direction:column; gap:13px; padding-top:2px; }
@@ -196,7 +186,7 @@ h1 span { color:var(--gold); font-style:italic; }
 
 /* eval */
 .eval-wrap { transition:opacity .3s; }
-.eval-wrap.eval-hidden { opacity:0; pointer-events:none; }
+.eval-wrap.eval-hidden { display:none; }
 .eval-row { display:flex; align-items:center; gap:8px; }
 .eval-bar { flex:1; height:8px; background:#111; border-radius:4px; overflow:hidden; border:1px solid var(--border); }
 .eval-fill { height:100%; background:var(--cream); border-radius:4px; transition:width .4s ease; width:50%; }
@@ -1325,253 +1315,300 @@ function renderBoard(){
 }
 
 // ════════════════════════════════════════════════════════════
-//  DRAG STATE
+//  DRAG / TOUCH / CLICK SYSTEM
+//
+//  Strategy (mobile Safari):
+//   - touchstart → record start, set 150ms timer
+//   - If finger moves >10px before timer fires → it's a DRAG
+//     Show ghost, track finger, on touchend land on target square
+//   - If timer fires before movement → it's a TAP
+//     Hide ghost immediately, run tap logic (select/move)
+//   - suppressNextClick prevents the synthetic click Safari fires
+//     after touchend from interfering (board-only, not buttons)
 // ════════════════════════════════════════════════════════════
-let dragState=null;
-// Suppress Safari's synthetic 'click' that fires ~300ms after touchend
-let suppressNextClick=false;
+let dragState = null;
+let suppressNextClick = false; // blocks the ghost synthetic click on board squares only
 
-// Move ghost via transform (not left/top) for reliable Safari rendering
-function _moveGhost(x, y, isTouch){
-  const ghost=document.getElementById('drag-ghost');
-  if(!ghost)return;
-  // On touch: offset upward by half the ghost height so piece shows above finger
-  const w=ghost.offsetWidth, h=ghost.offsetHeight;
-  const ox = isTouch ? -w/2 : -w/2;
-  const oy = isTouch ? -h*0.85 : -h/2;
-  ghost.style.transform=`translate(${x+ox}px,${y+oy}px)`;
+// ── Ghost helpers ─────────────────────────────────────────
+// Ghost size in px (read once per drag, avoids layout queries mid-move)
+let _ghostSize = 0;
+
+function _ghostSizePx(){
+  // compute square size from board element
+  const b = document.getElementById('chessboard');
+  if(!b) return 58;
+  const sz = b.getBoundingClientRect().width / 8;
+  // on coarse pointer (touch) make it 1.4× for visibility
+  return window.matchMedia('(pointer:coarse)').matches ? sz * 1.4 : sz;
 }
 
-// Compute which square name is under a client coordinate using board geometry.
-// More reliable than elementFromPoint on Safari (avoids overlay/ghost issues).
+function _positionGhost(x, y){
+  const ghost = document.getElementById('drag-ghost');
+  if(!ghost) return;
+  const sz = _ghostSize || _ghostSizePx();
+  const isCoarse = window.matchMedia('(pointer:coarse)').matches;
+  // Centre horizontally; on touch shift up so piece is above the fingertip
+  const ox = -sz / 2;
+  const oy = isCoarse ? -sz * 0.85 : -sz / 2;
+  ghost.style.transform = `translate(${Math.round(x + ox)}px,${Math.round(y + oy)}px)`;
+}
+
+function _showGhost(sqName, x, y){
+  const ghost = document.getElementById('drag-ghost');
+  if(!ghost || !game) return;
+  const piece = game.board[parseSq(sqName)];
+  if(!piece) return;
+  _ghostSize = _ghostSizePx();
+  ghost.style.width  = _ghostSize + 'px';
+  ghost.style.height = _ghostSize + 'px';
+  ghost.innerHTML = SVG[pieceKey(piece)] || '';
+  _positionGhost(x, y);
+  ghost.style.display = 'block';
+}
+
+function _hideGhost(){
+  const ghost = document.getElementById('drag-ghost');
+  if(ghost){ ghost.style.display = 'none'; ghost.innerHTML = ''; }
+}
+
+// ── Coordinate helper ─────────────────────────────────────
 function sqNameFromCoords(clientX, clientY){
-  const boardEl=document.getElementById('chessboard');
-  if(!boardEl)return null;
-  const rect=boardEl.getBoundingClientRect();
-  const relX=clientX-rect.left, relY=clientY-rect.top;
-  if(relX<0||relY<0||relX>=rect.width||relY>=rect.height)return null;
-  const col=Math.floor(relX/(rect.width/8));
-  const row=Math.floor(relY/(rect.height/8));
-  const flipped=playerColor==='black';
-  const file=flipped?7-col:col;
-  const rank=flipped?row:7-row;
-  return FILES[file]+(rank+1);
+  const b = document.getElementById('chessboard');
+  if(!b) return null;
+  const r = b.getBoundingClientRect();
+  const relX = clientX - r.left, relY = clientY - r.top;
+  if(relX < 0 || relY < 0 || relX >= r.width || relY >= r.height) return null;
+  const col = Math.floor(relX / (r.width  / 8));
+  const row = Math.floor(relY / (r.height / 8));
+  const flipped = playerColor === 'black';
+  const file = flipped ? 7 - col : col;
+  const rank = flipped ? row     : 7 - row;
+  return FILES[file] + (rank + 1);
 }
 
-function onDragStart(e,name){
-  if(e.button===2)return; // right-click = arrow drawing only
+// Legacy alias used by arrow drawing code
+function squareAtPoint(x, y){ return sqNameFromCoords(x, y); }
 
-  const isTouch=e.type==='touchstart';
+// ── Touch-start handler ───────────────────────────────────
+function onDragStart(e, name){
+  if(e.button === 2) return; // right-click = arrows only
+
+  const isTouch = e.type === 'touchstart';
+
   if(isTouch){
-    e.preventDefault(); // must be called synchronously to work on Safari
-    suppressNextClick=true;
+    // Must call synchronously for Safari to honour preventDefault on subsequent moves
+    e.preventDefault();
   }
 
+  // Exit browse mode on any board touch/click
   if(isBrowsing()){
-    if(isTouch) exitBrowseMode();
+    if(isTouch) suppressNextClick = true;
+    exitBrowseMode();
     return;
   }
-  if(isThinking||pendingPromo||game.isGameOver())return;
-  const playerTurn=playerColor==='white'?W:B;
-  if(game.turn!==playerTurn)return;
-  const piece=game.board[parseSq(name)];
-  if(!piece||piece.c!==playerTurn)return;
 
-  const pos=getEventPos(e);
+  if(isThinking || pendingPromo || !game || game.isGameOver()) return;
+  const playerTurn = playerColor === 'white' ? W : B;
+  if(game.turn !== playerTurn) return;
+  const piece = game.board[parseSq(name)];
+  if(!piece || piece.c !== playerTurn) return;
 
-  // On touch: start drag immediately (no threshold) so ghost tracks finger from the start
-  // On mouse: use a small threshold so accidental micro-moves don't trigger drag
-  const startDragging=isTouch; // immediately for touch
-
-  dragState={
-    fromName:name,
-    startPos:{...pos},
-    isTouch,
-    isDragging:startDragging,
-    rafId:null,
-    pendingX:pos.x,
-    pendingY:pos.y,
-  };
-
-  if(startDragging){
-    // Show ghost immediately at touch position
-    _showGhost(name, pos.x, pos.y, isTouch);
-    const originEl=document.querySelector(`[data-sq="${name}"]`);
-    if(originEl)originEl.classList.add('dragging-from');
-    selectSq(name);
-  }
+  const pos = getEventPos(e);
 
   if(isTouch){
-    document.addEventListener('touchmove',  onDragMove,   {passive:false});
-    document.addEventListener('touchend',   onDragEnd,    {passive:false});
-    document.addEventListener('touchcancel',onDragCancel, {passive:false});
-  }else{
-    document.addEventListener('mousemove',  onDragMove,   {passive:false});
-    document.addEventListener('mouseup',    onDragEnd,    {passive:false});
-  }
-}
+    // ── TOUCH: defer decision between tap and drag ────────
+    suppressNextClick = true; // always suppress the synthetic click Safari fires
 
-function _showGhost(name, x, y, isTouch){
-  const ghost=document.getElementById('drag-ghost');
-  const piece=game.board[parseSq(name)];
-  if(!ghost||!piece)return;
-  ghost.innerHTML=SVG[pieceKey(piece)]||'';
-  ghost.style.display='block';
-  _moveGhost(x, y, isTouch);
+    dragState = {
+      fromName: name,
+      startPos: { x: pos.x, y: pos.y },
+      isTouch: true,
+      isDragging: false,
+      decided: false,    // true once we've committed to tap or drag
+      tapTimer: null,
+      rafId: null,
+      pendingX: pos.x,
+      pendingY: pos.y,
+    };
+
+    // After 180ms with no significant movement → treat as tap
+    dragState.tapTimer = setTimeout(() => {
+      if(!dragState || dragState.decided) return;
+      dragState.decided = true;
+      dragState.tapTimer = null;
+      // It's a tap: run select/move logic immediately
+      _hideGhost();
+      const origin = document.querySelector(`[data-sq="${dragState.fromName}"]`);
+      if(origin) origin.classList.remove('dragging-from');
+      onSquareTap(dragState.fromName);
+      // don't null dragState — touchend still needs to clean up listeners
+      dragState.isDragging = false;
+    }, 180);
+
+    document.addEventListener('touchmove',   onDragMove,   { passive: false });
+    document.addEventListener('touchend',    onDragEnd,    { passive: false });
+    document.addEventListener('touchcancel', onDragCancel, { passive: false });
+
+  } else {
+    // ── MOUSE: standard threshold-based drag ─────────────
+    dragState = {
+      fromName: name,
+      startPos: { x: pos.x, y: pos.y },
+      isTouch: false,
+      isDragging: false,
+      decided: false,
+      tapTimer: null,
+      rafId: null,
+      pendingX: pos.x,
+      pendingY: pos.y,
+    };
+    document.addEventListener('mousemove', onDragMove, { passive: false });
+    document.addEventListener('mouseup',   onDragEnd,  { passive: false });
+  }
 }
 
 function onDragMove(e){
-  if(!dragState)return;
-  if(e.cancelable)e.preventDefault();
-  const pos=getEventPos(e);
-  dragState.pendingX=pos.x;
-  dragState.pendingY=pos.y;
+  if(!dragState) return;
+  if(e.cancelable) e.preventDefault();
+  const pos = getEventPos(e);
+  dragState.pendingX = pos.x;
+  dragState.pendingY = pos.y;
 
   if(!dragState.isDragging){
-    // Mouse-only threshold check
-    const dx=pos.x-dragState.startPos.x, dy=pos.y-dragState.startPos.y;
-    if(Math.sqrt(dx*dx+dy*dy)<5)return;
-    dragState.isDragging=true;
-    selectSq(dragState.fromName);
-    _showGhost(dragState.fromName, pos.x, pos.y, dragState.isTouch);
-    const originEl=document.querySelector(`[data-sq="${dragState.fromName}"]`);
-    if(originEl)originEl.classList.add('dragging-from');
+    const dx = pos.x - dragState.startPos.x;
+    const dy = pos.y - dragState.startPos.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    const threshold = dragState.isTouch ? 10 : 5;
+    if(dist < threshold) return;
+
+    // Movement exceeded threshold → it's a drag
+    if(dragState.tapTimer){ clearTimeout(dragState.tapTimer); dragState.tapTimer = null; }
+    dragState.decided = true;
+    dragState.isDragging = true;
+
+    // Select the piece (shows legal move hints) and show ghost
+    selectedSq = dragState.fromName;
+    legalMoves = game.moves({ square: dragState.fromName });
+    // Rebuild board to show selection highlights WITHOUT removing dragging-from yet
+    // We do a lightweight highlight rather than full renderBoard to keep the origin square
+    _showGhost(dragState.fromName, pos.x, pos.y);
+    renderBoard(); // re-renders; dragging-from must be re-applied after renderBoard
+    const origin = document.querySelector(`[data-sq="${dragState.fromName}"]`);
+    if(origin) origin.classList.add('dragging-from');
     return;
   }
 
-  // Use requestAnimationFrame to throttle ghost updates — smoother on Safari
-  if(dragState.rafId)cancelAnimationFrame(dragState.rafId);
-  dragState.rafId=requestAnimationFrame(()=>{
-    if(!dragState)return;
-    _moveGhost(dragState.pendingX, dragState.pendingY, dragState.isTouch);
-    dragState.rafId=null;
+  // Already dragging: update ghost position via rAF
+  if(dragState.rafId) cancelAnimationFrame(dragState.rafId);
+  dragState.rafId = requestAnimationFrame(() => {
+    if(!dragState) return;
+    _positionGhost(dragState.pendingX, dragState.pendingY);
+    dragState.rafId = null;
   });
 }
 
 function onDragEnd(e){
-  if(!dragState)return;
-  if(e.cancelable)e.preventDefault();
+  if(!dragState) return;
+  if(e.cancelable) e.preventDefault();
   _cleanupDragListeners();
-  if(dragState.rafId)cancelAnimationFrame(dragState.rafId);
+  if(dragState.tapTimer){ clearTimeout(dragState.tapTimer); dragState.tapTimer = null; }
+  if(dragState.rafId){ cancelAnimationFrame(dragState.rafId); dragState.rafId = null; }
 
-  const wasDragging=dragState.isDragging;
-  const fromName=dragState.fromName;
-  const isTouch=dragState.isTouch;
-  const startPos=dragState.startPos;
+  const wasDragging = dragState.isDragging;
+  const fromName    = dragState.fromName;
+  const isTouch     = dragState.isTouch;
+  const startPos    = dragState.startPos;
+  dragState = null;
 
-  const ghost=document.getElementById('drag-ghost');
-  ghost.style.display='none'; ghost.innerHTML='';
-  const originEl=document.querySelector(`[data-sq="${fromName}"]`);
-  if(originEl)originEl.classList.remove('dragging-from');
-  dragState=null;
+  _hideGhost();
+  const origin = document.querySelector(`[data-sq="${fromName}"]`);
+  if(origin) origin.classList.remove('dragging-from');
 
   if(!wasDragging){
-    // Tap (mouse only — touch never goes through this path since isDragging=true from start)
-    // mouse fires its own native click event, nothing to do here
-    return;
-  }
-
-  // For touch taps (isDragging=true immediately), check if finger barely moved
-  const pos=getEventPos(e);
-  const dx=pos.x-startPos.x, dy=pos.y-startPos.y;
-  const isTap=isTouch && Math.sqrt(dx*dx+dy*dy)<12;
-
-  if(isTap){
-    // Treat as square tap — re-run tap logic at start square
+    // Touch tap timer already handled it (or mouse — mouse fires native click)
+    if(!isTouch) return; // mouse: let native click event handle it
+    // Touch tap that fired before timer? Shouldn't normally happen, but handle gracefully
     onSquareTap(fromName);
     return;
   }
 
-  // Drag release — find target square from geometry
-  const toName=sqNameFromCoords(pos.x, pos.y);
-  if(!toName){renderBoard();return;}
-  const hit=legalMoves.find(m=>m.to===toName);
+  // Drag ended — determine target square
+  const pos = getEventPos(e);
+  const toName = sqNameFromCoords(pos.x, pos.y);
+  if(!toName || toName === fromName){ renderBoard(); return; }
+  const hit = legalMoves.find(m => m.to === toName);
   if(hit){
-    if(hit.flags.includes('p')){pendingPromo={from:fromName,to:toName};showPromo();return;}
-    doPlayerMove(fromName,toName,'q');return;
+    if(hit.flags.includes('p')){ pendingPromo = { from: fromName, to: toName }; showPromo(); return; }
+    doPlayerMove(fromName, toName, 'q');
+    return;
   }
   renderBoard();
 }
 
 function onDragCancel(){
-  if(!dragState)return;
+  if(!dragState) return;
   _cleanupDragListeners();
-  if(dragState.rafId)cancelAnimationFrame(dragState.rafId);
-  const ghost=document.getElementById('drag-ghost');
-  ghost.style.display='none'; ghost.innerHTML='';
-  const originEl=document.querySelector(`[data-sq="${dragState.fromName}"]`);
-  if(originEl)originEl.classList.remove('dragging-from');
-  dragState=null;
+  if(dragState.tapTimer){ clearTimeout(dragState.tapTimer); dragState.tapTimer = null; }
+  if(dragState.rafId){ cancelAnimationFrame(dragState.rafId); dragState.rafId = null; }
+  const fromName = dragState.fromName;
+  dragState = null;
+  _hideGhost();
+  const origin = document.querySelector(`[data-sq="${fromName}"]`);
+  if(origin) origin.classList.remove('dragging-from');
   renderBoard();
 }
 
 function _cleanupDragListeners(){
-  document.removeEventListener('mousemove',  onDragMove);
-  document.removeEventListener('mouseup',    onDragEnd);
-  document.removeEventListener('touchmove',  onDragMove);
-  document.removeEventListener('touchend',   onDragEnd);
-  document.removeEventListener('touchcancel',onDragCancel);
+  document.removeEventListener('mousemove',   onDragMove);
+  document.removeEventListener('mouseup',     onDragEnd);
+  document.removeEventListener('touchmove',   onDragMove);
+  document.removeEventListener('touchend',    onDragEnd);
+  document.removeEventListener('touchcancel', onDragCancel);
 }
 
 function getEventPos(e){
-  if(e.touches&&e.touches.length>0)return{x:e.touches[0].clientX,y:e.touches[0].clientY};
-  if(e.changedTouches&&e.changedTouches.length>0)return{x:e.changedTouches[0].clientX,y:e.changedTouches[0].clientY};
-  return{x:e.clientX,y:e.clientY};
-}
-
-// Legacy — kept for arrow drawing code compatibility
-function squareAtPoint(x,y){
-  return sqNameFromCoords(x,y);
+  if(e.touches        && e.touches.length        > 0) return { x: e.touches[0].clientX,        y: e.touches[0].clientY        };
+  if(e.changedTouches && e.changedTouches.length > 0) return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+  return { x: e.clientX, y: e.clientY };
 }
 
 // ════════════════════════════════════════════════════════════
 //  CLICK / TAP INTERACTION
 // ════════════════════════════════════════════════════════════
 
-// Touch tap — called from onDragEnd when movement was tiny (finger barely moved)
-function onSquareTap(name){
-  if(isBrowsing()){exitBrowseMode();return;}
-  if(isThinking||pendingPromo||game.isGameOver())return;
-  const playerTurn=playerColor==='white'?W:B;
-  if(game.turn!==playerTurn)return;
-  const p=game.board[parseSq(name)];
+// Shared logic for both mouse-click and touch-tap
+function _handleSquareAction(name){
+  if(isBrowsing()){ exitBrowseMode(); return; }
+  if(isThinking || pendingPromo || !game || game.isGameOver()) return;
+  const playerTurn = playerColor === 'white' ? W : B;
+  if(game.turn !== playerTurn) return;
+  const p = game.board[parseSq(name)];
   if(selectedSq){
-    if(selectedSq===name){selectedSq=null;legalMoves=[];renderBoard();return;}
-    const hit=legalMoves.find(m=>m.to===name);
+    if(selectedSq === name){ selectedSq = null; legalMoves = []; renderBoard(); return; }
+    const hit = legalMoves.find(m => m.to === name);
     if(hit){
-      if(hit.flags.includes('p')){pendingPromo={from:selectedSq,to:name};showPromo();return;}
-      doPlayerMove(selectedSq,name,'q');return;
+      if(hit.flags.includes('p')){ pendingPromo = { from: selectedSq, to: name }; showPromo(); return; }
+      doPlayerMove(selectedSq, name, 'q'); return;
     }
-    if(p&&p.c===playerTurn){selectSq(name);return;}
-    selectedSq=null;legalMoves=[];renderBoard();return;
+    if(p && p.c === playerTurn){ selectSq(name); return; }
+    selectedSq = null; legalMoves = []; renderBoard(); return;
   }
-  if(p&&p.c===playerTurn)selectSq(name);
+  if(p && p.c === playerTurn) selectSq(name);
 }
 
-function onSquareClick(e,name){
-  if(e.button===2)return; // right-click = arrows only
-  if(suppressNextClick){suppressNextClick=false;return;} // swallow Safari synthetic click
-  if(isBrowsing()){exitBrowseMode();return;}
-  if(isThinking||pendingPromo||game.isGameOver())return;
-  const playerTurn=playerColor==='white'?W:B;
-  if(game.turn!==playerTurn)return;
-  const p=game.board[parseSq(name)];
-  if(selectedSq){
-    if(selectedSq===name){selectedSq=null;legalMoves=[];renderBoard();return;}
-    const hit=legalMoves.find(m=>m.to===name);
-    if(hit){
-      if(hit.flags.includes('p')){pendingPromo={from:selectedSq,to:name};showPromo();return;}
-      doPlayerMove(selectedSq,name,'q');return;
-    }
-    if(p&&p.c===playerTurn){selectSq(name);return;}
-    selectedSq=null;legalMoves=[];renderBoard();return;
-  }
-  if(p&&p.c===playerTurn)selectSq(name);
+// Called from the tap-timer callback (touch)
+function onSquareTap(name){ _handleSquareAction(name); }
+
+// Called by native click event (mouse on desktop)
+function onSquareClick(e, name){
+  if(e.button === 2) return; // arrows only
+  if(suppressNextClick){ suppressNextClick = false; return; } // swallow Safari synthetic click
+  _handleSquareAction(name);
 }
 
 function selectSq(name){
-  selectedSq=name;
-  legalMoves=game.moves({square:name});
+  selectedSq = name;
+  legalMoves = game.moves({ square: name });
   renderBoard();
 }
 
