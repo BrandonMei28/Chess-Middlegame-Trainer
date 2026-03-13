@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Chess Middlegame Trainer</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Mono:wght@300;400;500&display=swap');
@@ -115,6 +115,9 @@ h1 span { color:var(--gold); font-style:italic; }
   border-radius:2px;
   overflow:hidden;
   user-select:none;
+  -webkit-user-select:none;
+  touch-action:none;          /* prevent Safari scroll/zoom during piece drag */
+  -webkit-touch-callout:none; /* suppress long-press callout on iOS */
   flex-shrink:0;
 }
 /* board in history-browse mode — no dimming, keep full brightness */
@@ -125,6 +128,8 @@ h1 span { color:var(--gold); font-style:italic; }
   height: calc(var(--board-size) / 8);
   display:flex; align-items:center; justify-content:center;
   cursor:pointer; flex-shrink:0; overflow:hidden;
+  -webkit-tap-highlight-color:transparent; /* remove grey flash on iOS tap */
+  touch-action:none;
 }
 .sq.light { background:var(--light-sq); }
 .sq.dark  { background:var(--dark-sq); }
@@ -169,8 +174,17 @@ h1 span { color:var(--gold); font-style:italic; }
   width:  calc(var(--board-size) / 8);
   height: calc(var(--board-size) / 8);
   transform:translate(-50%,-50%); opacity:.95;
+  will-change:left,top; /* GPU-accelerate ghost movement on mobile */
 }
 #drag-ghost svg { width:100%; height:100%; display:block; }
+/* On touch devices make the ghost 1.4× larger so it's visible above the finger */
+@media (pointer:coarse) {
+  #drag-ghost {
+    width:  calc(var(--board-size) / 8 * 1.4);
+    height: calc(var(--board-size) / 8 * 1.4);
+    transform:translate(-50%,-80%); /* shift up so piece shows above fingertip */
+  }
+}
 
 /* ── SIDEBAR ── */
 .sidebar { width:205px; display:flex; flex-direction:column; gap:13px; padding-top:2px; }
@@ -283,7 +297,17 @@ h1 span { color:var(--gold); font-style:italic; }
   .sidebar { width:var(--board-size); flex-direction:row; flex-wrap:wrap; }
   .card { flex:1; min-width:130px; }
   .resign-btn { right:-38px; }
+  /* Larger tap targets for buttons on mobile */
+  .top-btn { padding:9px 13px; }
+  .move-pair { padding:4px 4px; }
+  .move-san { padding:4px 5px; }
+  /* Prevent rubber-band scroll on iOS when touching buttons */
+  .topbar-btns { -webkit-overflow-scrolling:touch; }
 }
+
+/* Prevent iOS overscroll bounce on the whole page */
+html { height:100%; overflow:hidden; }
+body { height:100%; overflow:auto; -webkit-overflow-scrolling:touch; }
 </style>
 </head>
 <body>
@@ -292,7 +316,7 @@ h1 span { color:var(--gold); font-style:italic; }
 <div id="home-screen" class="screen active">
   <div class="home-header">
     <div class="eyebrow">Chess</div>
-    <h1>Middlegame<br><span>Trainer</span></h1>
+    <h1>Middlegame<br><span><small>Trainer</small></span></h1>
     <p class="subtitle">Step straight into balanced, equal positions and<br>prove your middlegame mastery.</p>
   </div>
   <div class="config-panel">
@@ -330,7 +354,7 @@ h1 span { color:var(--gold); font-style:italic; }
 <!-- ═══ GAME SCREEN ═══ -->
 <div id="game-screen" class="screen">
   <div class="topbar">
-    <div class="logo">Middlegame</div>
+    <div class="logo">Middlegame Trainer</div>
     <div class="topbar-btns">
       <button class="top-btn active-toggle" id="btn-hints" onclick="toggleHints()">Hide Moves</button>
       <button class="top-btn" id="btn-eval"  onclick="toggleEval()">Show Eval</button>
@@ -388,7 +412,7 @@ h1 span { color:var(--gold); font-style:italic; }
           </div>
         </div>
       </div>
-      <div class="card" id="history-card" onclick="onHistoryCardClick(event)">
+      <div class="card" id="history-card" onclick="onHistoryCardClick(event)" ontouchend="onHistoryCardTouch(event)">
         <div class="card-title">Move History</div>
         <div class="move-list" id="move-list"></div>
         <div class="browse-hint" id="browse-hint" style="display:none">← → arrows to navigate · click away to exit</div>
@@ -1155,6 +1179,15 @@ function onHistoryCardClick(e){
   if(isNaN(idx))return;
   enterBrowseMode(idx);
 }
+function onHistoryCardTouch(e){
+  // Handle tap on move-san spans on touch devices
+  const span=e.target.closest('.move-san');
+  if(!span)return;
+  e.preventDefault(); // prevent synthetic click
+  const idx=parseInt(span.dataset.moveIdx);
+  if(isNaN(idx))return;
+  enterBrowseMode(idx);
+}
 
 function renderBrowseBoard(){
   if(!browseGame)return;
@@ -1184,8 +1217,10 @@ function renderBrowseBoard(){
       const p=browseGame.board[sq(c,r)];
       if(p){const el=document.createElement('div');el.className='piece';el.innerHTML=SVG[pieceKey(p)]||'';div.appendChild(el);}
 
-      // Clicks in browse mode: click anywhere non-history exits
-      div.addEventListener('click',()=>exitBrowseMode());
+      // Clicks in browse mode: click anywhere non-history exits.
+      // On touch, use touchend to exit and prevent the subsequent synthetic click.
+      div.addEventListener('touchend',e=>{e.preventDefault();exitBrowseMode();},{passive:false});
+      div.addEventListener('click',e=>{if(lastWasTouch){lastWasTouch=false;return;}exitBrowseMode();});
       board.appendChild(div);
     }
   }
@@ -1277,6 +1312,8 @@ function renderBoard(){
 
       div.addEventListener('click',e=>onSquareClick(e,name));
       div.addEventListener('mousedown',e=>onDragStart(e,name));
+      // touchstart: always preventDefault to block scroll/zoom/synthetic-click,
+      // then delegate to onDragStart for drag logic
       div.addEventListener('touchstart',e=>onDragStart(e,name),{passive:false});
 
       board.appendChild(div);
@@ -1289,23 +1326,47 @@ function renderBoard(){
 //  DRAG STATE
 // ════════════════════════════════════════════════════════════
 let dragState=null;
+// Track whether the last interaction was a touch, to suppress
+// the synthetic 'click' Safari fires after touchend
+let lastWasTouch=false;
 
 function onDragStart(e,name){
   // Right-click is reserved for arrow drawing — never drag pieces with it
   if(e.button===2)return;
+
+  const isTouch=e.type==='touchstart';
+
+  // Always prevent default on touchstart over the board so Safari doesn't
+  // scroll, zoom, or fire a delayed synthetic click
+  if(isTouch){
+    e.preventDefault();
+    lastWasTouch=true;
+  }
+
   if(isBrowsing()){exitBrowseMode();return;}
   if(isThinking||pendingPromo||game.isGameOver())return;
   const playerTurn=playerColor==='white'?W:B;
   if(game.turn!==playerTurn)return;
   const p=game.board[parseSq(name)];
   if(!p||p.c!==playerTurn)return;
-  if(e.type==='touchstart')e.preventDefault();
+
   const startPos=getEventPos(e);
-  dragState={fromName:name,startPos,currentPos:{...startPos},isDragging:false,cancelled:false};
-  document.addEventListener('mousemove',onDragMove,{passive:false});
-  document.addEventListener('mouseup',onDragEnd,{passive:false});
-  document.addEventListener('touchmove',onDragMove,{passive:false});
-  document.addEventListener('touchend',onDragEnd,{passive:false});
+  dragState={
+    fromName:name,
+    startPos,
+    currentPos:{...startPos},
+    isDragging:false,
+    isTouch,
+  };
+
+  if(isTouch){
+    document.addEventListener('touchmove', onDragMove,{passive:false});
+    document.addEventListener('touchend',  onDragEnd, {passive:false});
+    document.addEventListener('touchcancel',onDragCancel,{passive:false});
+  }else{
+    document.addEventListener('mousemove', onDragMove,{passive:false});
+    document.addEventListener('mouseup',   onDragEnd, {passive:false});
+  }
 }
 
 function onDragMove(e){
@@ -1314,8 +1375,10 @@ function onDragMove(e){
   const pos=getEventPos(e);
   dragState.currentPos=pos;
   if(!dragState.isDragging){
-    const dx=pos.x-dragState.startPos.x,dy=pos.y-dragState.startPos.y;
-    if(Math.sqrt(dx*dx+dy*dy)<5)return;
+    const dx=pos.x-dragState.startPos.x, dy=pos.y-dragState.startPos.y;
+    // Use a larger threshold on touch so small finger wobbles don't trigger drag
+    const threshold=dragState.isTouch?8:5;
+    if(Math.sqrt(dx*dx+dy*dy)<threshold)return;
     dragState.isDragging=true;
     selectSq(dragState.fromName);
     const ghost=document.getElementById('drag-ghost');
@@ -1333,18 +1396,28 @@ function onDragMove(e){
 
 function onDragEnd(e){
   if(!dragState)return;
-  document.removeEventListener('mousemove',onDragMove);
-  document.removeEventListener('mouseup',onDragEnd);
-  document.removeEventListener('touchmove',onDragMove);
-  document.removeEventListener('touchend',onDragEnd);
+  _cleanupDragListeners();
   const wasDragging=dragState.isDragging;
   const fromName=dragState.fromName;
+  const isTouch=dragState.isTouch;
   const ghost=document.getElementById('drag-ghost');
   ghost.style.display='none'; ghost.innerHTML='';
   const originEl=document.querySelector(`[data-sq="${fromName}"]`);
   if(originEl)originEl.classList.remove('dragging-from');
+  const savedDragState=dragState;
   dragState=null;
-  if(!wasDragging)return;
+
+  if(!wasDragging){
+    // It was a tap — handle as a click for touch, but not for mouse
+    // (mouse fires its own 'click' event natively)
+    if(isTouch){
+      // Manually invoke click logic using the start position
+      const tappedSq=squareAtPoint(savedDragState.startPos.x, savedDragState.startPos.y);
+      if(tappedSq)onSquareTap(tappedSq);
+    }
+    return;
+  }
+
   const pos=getEventPos(e);
   const toName=squareAtPoint(pos.x,pos.y);
   if(!toName){renderBoard();return;}
@@ -1354,6 +1427,26 @@ function onDragEnd(e){
     doPlayerMove(fromName,toName,'q');return;
   }
   renderBoard();
+}
+
+function onDragCancel(){
+  // Safari fires touchcancel e.g. when a notification appears mid-drag
+  if(!dragState)return;
+  _cleanupDragListeners();
+  const ghost=document.getElementById('drag-ghost');
+  ghost.style.display='none'; ghost.innerHTML='';
+  const originEl=document.querySelector(`[data-sq="${dragState.fromName}"]`);
+  if(originEl)originEl.classList.remove('dragging-from');
+  dragState=null;
+  renderBoard();
+}
+
+function _cleanupDragListeners(){
+  document.removeEventListener('mousemove',  onDragMove);
+  document.removeEventListener('mouseup',    onDragEnd);
+  document.removeEventListener('touchmove',  onDragMove);
+  document.removeEventListener('touchend',   onDragEnd);
+  document.removeEventListener('touchcancel',onDragCancel);
 }
 
 function getEventPos(e){
@@ -1371,8 +1464,31 @@ function squareAtPoint(x,y){
 // ════════════════════════════════════════════════════════════
 //  CLICK INTERACTION
 // ════════════════════════════════════════════════════════════
+
+// Touch tap — called manually from onDragEnd when it was a tap (not drag)
+function onSquareTap(name){
+  if(isBrowsing()){exitBrowseMode();return;}
+  if(isThinking||pendingPromo||game.isGameOver())return;
+  const playerTurn=playerColor==='white'?W:B;
+  if(game.turn!==playerTurn)return;
+  const p=game.board[parseSq(name)];
+  if(selectedSq){
+    if(selectedSq===name){selectedSq=null;legalMoves=[];renderBoard();return;}
+    const hit=legalMoves.find(m=>m.to===name);
+    if(hit){
+      if(hit.flags.includes('p')){pendingPromo={from:selectedSq,to:name};showPromo();return;}
+      doPlayerMove(selectedSq,name,'q');return;
+    }
+    if(p&&p.c===playerTurn){selectSq(name);return;}
+    selectedSq=null;legalMoves=[];renderBoard();return;
+  }
+  if(p&&p.c===playerTurn)selectSq(name);
+}
+
 function onSquareClick(e,name){
   if(e.button===2)return; // right-click is for arrows only
+  // Suppress the synthetic click Safari fires after touchend
+  if(lastWasTouch){lastWasTouch=false;return;}
   if(isBrowsing()){exitBrowseMode();return;}
   if(isThinking||pendingPromo||game.isGameOver())return;
   const playerTurn=playerColor==='white'?W:B;
