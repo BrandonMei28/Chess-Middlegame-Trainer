@@ -41,17 +41,24 @@ h1 { font-family:'Playfair Display',serif; font-size:clamp(34px,6vw,58px); font-
 h1 span { color:var(--gold); font-style:italic; }
 .subtitle { margin-top:14px; color:var(--cream-dim); font-size:13px; letter-spacing:.5px; line-height:1.7; text-align:center; }
 .home-header { margin-bottom:38px; }
-.config-panel { background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:34px; width:100%; max-width:480px; }
+.config-panel { background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:34px; width:100%; max-width:520px; }
 .cfg-label { font-size:10px; letter-spacing:3px; text-transform:uppercase; color:var(--gold); margin-bottom:11px; }
 .cfg-group { margin-bottom:24px; }
 .toggle-row { display:flex; border:1px solid var(--border); border-radius:3px; overflow:hidden; }
 .toggle-btn { flex:1; padding:12px 0; background:transparent; border:none; color:var(--cream-dim); font-family:'DM Mono',monospace; font-size:12px; letter-spacing:2px; text-transform:uppercase; cursor:pointer; transition:all .2s; }
 .toggle-btn.active { background:var(--gold); color:var(--bg); font-weight:500; }
 .toggle-btn:not(.active):hover { background:var(--surface2); color:var(--cream); }
-.diff-row { display:flex; gap:8px; }
-.diff-btn { flex:1; padding:12px 8px; background:transparent; border:1px solid var(--border); border-radius:3px; color:var(--cream-dim); font-family:'DM Mono',monospace; font-size:11px; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; transition:all .2s; }
+.diff-row { display:flex; gap:8px; flex-wrap:wrap; }
+.diff-btn { flex:1; min-width:60px; padding:10px 6px; background:transparent; border:1px solid var(--border); border-radius:3px; color:var(--cream-dim); font-family:'DM Mono',monospace; font-size:10px; letter-spacing:1px; text-transform:uppercase; cursor:pointer; transition:all .2s; }
 .diff-btn.active { border-color:var(--gold); color:var(--gold); background:rgba(201,168,76,.06); }
 .diff-btn:not(.active):hover { border-color:var(--cream-dim); color:var(--cream); }
+/* Expert difficulty gets a special colour when active */
+.diff-btn[data-diff="expert"].active,
+.diff-btn[data-ng-diff="expert"].active { border-color:#b44fdf; color:#b44fdf; background:rgba(180,79,223,.08); }
+.tc-row { display:flex; gap:6px; flex-wrap:wrap; }
+.tc-btn { flex:1; min-width:64px; padding:9px 4px; background:transparent; border:1px solid var(--border); border-radius:3px; color:var(--cream-dim); font-family:'DM Mono',monospace; font-size:9px; letter-spacing:.5px; text-transform:uppercase; cursor:pointer; transition:all .2s; text-align:center; }
+.tc-btn.active { border-color:var(--gold); color:var(--gold); background:rgba(201,168,76,.06); }
+.tc-btn:not(.active):hover { border-color:var(--cream-dim); color:var(--cream); }
 .gen-btn { width:100%; padding:16px; background:var(--gold); border:none; border-radius:3px; color:var(--bg); font-family:'Playfair Display',serif; font-size:18px; font-weight:700; cursor:pointer; transition:all .2s; margin-top:4px; }
 .gen-btn:hover { background:var(--cream); transform:translateY(-1px); }
 .gen-btn:active { transform:translateY(0); }
@@ -72,9 +79,30 @@ h1 span { color:var(--gold); font-style:italic; }
 
 /* ── GAME LAYOUT ── */
 .game-layout { display:flex; gap:20px; align-items:flex-start; width:100%; justify-content:center; }
-.board-wrap { display:flex; flex-direction:column; align-items:center; gap:6px; flex-shrink:0; }
-.player-lbl { display:flex; align-items:center; gap:9px; font-size:12px; letter-spacing:1px; color:var(--cream-dim); padding:0 2px; }
+.board-wrap { display:flex; flex-direction:column; align-items:center; gap:6px; flex-shrink:0; position:relative; }
+
+/* player labels row: label on left, timer on right */
+.player-lbl {
+  display:flex; align-items:center; justify-content:space-between;
+  width:var(--board-size);
+  font-size:12px; letter-spacing:1px; color:var(--cream-dim); padding:0 2px;
+}
+.player-lbl-left { display:flex; align-items:center; gap:9px; }
 .pip { width:10px; height:10px; border-radius:50%; flex-shrink:0; border:1px solid rgba(255,255,255,.15); display:inline-block; }
+
+/* ── TIMER ── */
+.timer-display {
+  font-family:'DM Mono',monospace; font-size:13px; font-weight:500;
+  color:var(--cream-dim); letter-spacing:1px;
+  padding:2px 7px; border-radius:3px; border:1px solid transparent;
+  transition:color .3s, border-color .3s, background .3s;
+  min-width:54px; text-align:center;
+}
+.timer-display.active { color:var(--cream); border-color:var(--border); background:var(--surface); }
+.timer-display.warning { color:#e88c2a; border-color:#e88c2a; background:rgba(232,140,42,.08); }
+.timer-display.critical { color:var(--red); border-color:var(--red); background:rgba(224,64,64,.1); animation:pulse-timer .8s infinite; }
+.timer-display.hidden { visibility:hidden; }
+@keyframes pulse-timer { 0%,100%{opacity:1} 50%{opacity:.5} }
 
 /* ── BOARD ── */
 #chessboard {
@@ -87,9 +115,10 @@ h1 span { color:var(--gold); font-style:italic; }
   border-radius:2px;
   overflow:hidden;
   user-select:none;
-  /* Prevent any layout reflow from resizing the board */
   flex-shrink:0;
 }
+/* board in history-browse mode — no dimming, keep full brightness */
+#chessboard.browsing { }
 .sq {
   position:relative;
   width:  calc(var(--board-size) / 8);
@@ -105,6 +134,11 @@ h1 span { color:var(--gold); font-style:italic; }
 .sq.last-from.dark,  .sq.last-to.dark  { background:var(--last-d); }
 .sq.hint.light { background:var(--hint-l); }
 .sq.hint.dark  { background:var(--hint-d); }
+/* history-browse: highlight the browsed move in blue */
+.sq.browse-from.light { background:#a8c8e8; }
+.sq.browse-from.dark  { background:#7aa8cc; }
+.sq.browse-to.light   { background:#8bbce0; }
+.sq.browse-to.dark    { background:#6aabcf; }
 
 .coord {
   position:absolute; font-size:9px; font-family:'DM Mono',monospace;
@@ -119,13 +153,10 @@ h1 span { color:var(--gold); font-style:italic; }
   width:88%; height:88%;
   pointer-events:none;
   position:relative; z-index:2;
-  /* Critical: no flex/transform that might duplicate rendering */
   display:flex; align-items:center; justify-content:center;
   flex-shrink:0;
 }
 .piece svg { width:100%; height:100%; display:block; pointer-events:none; }
-
-/* When dragging: hide piece on origin square (ghost replaces it) */
 .sq.dragging-from > .piece { visibility:hidden; }
 
 /* move hints */
@@ -133,16 +164,11 @@ h1 span { color:var(--gold); font-style:italic; }
 .cap-ring { width:88%; height:88%; border-radius:50%; border:4px solid rgba(0,0,0,.2); pointer-events:none; position:absolute; z-index:1; }
 
 /* ── DRAG GHOST ── */
-/* The ghost is a fixed-position clone that follows the pointer */
 #drag-ghost {
-  position:fixed;
-  pointer-events:none;
-  z-index:9999;
-  display:none;
+  position:fixed; pointer-events:none; z-index:9999; display:none;
   width:  calc(var(--board-size) / 8);
   height: calc(var(--board-size) / 8);
-  transform:translate(-50%,-50%);
-  opacity:.95;
+  transform:translate(-50%,-50%); opacity:.95;
 }
 #drag-ghost svg { width:100%; height:100%; display:block; }
 
@@ -152,7 +178,7 @@ h1 span { color:var(--gold); font-style:italic; }
 .card-title { font-size:9px; letter-spacing:3px; text-transform:uppercase; color:var(--gold); margin-bottom:9px; }
 .status-txt { font-size:13px; color:var(--cream); line-height:1.6; min-height:36px; }
 
-/* eval — hidden by default, entire block hidden */
+/* eval */
 .eval-wrap { transition:opacity .3s; }
 .eval-wrap.eval-hidden { opacity:0; pointer-events:none; }
 .eval-row { display:flex; align-items:center; gap:8px; }
@@ -164,10 +190,16 @@ h1 span { color:var(--gold); font-style:italic; }
 .move-list { max-height:210px; overflow-y:auto; display:flex; flex-direction:column; gap:2px; }
 .move-list::-webkit-scrollbar { width:4px; }
 .move-list::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
-.move-pair { display:grid; grid-template-columns:20px 1fr 1fr; gap:4px; align-items:center; font-size:12px; padding:2px 4px; border-radius:2px; }
+.move-pair { display:grid; grid-template-columns:20px 1fr 1fr; gap:4px; align-items:center; font-size:12px; padding:2px 4px; border-radius:2px; cursor:pointer; }
 .move-pair:hover { background:var(--surface2); }
 .move-num { color:var(--dim); font-size:10px; }
-.move-san { color:var(--cream); padding:2px 3px; border-radius:2px; }
+.move-san { color:var(--cream); padding:2px 3px; border-radius:2px; transition:background .15s; }
+.move-san.browsed { background:var(--gold); color:var(--bg); border-radius:2px; }
+/* browse navigation hint */
+.browse-hint {
+  font-size:9px; color:var(--dim); text-align:center; padding:4px 0 0;
+  letter-spacing:.5px;
+}
 
 /* ── OVERLAYS / MODALS ── */
 .overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.78); z-index:200; align-items:center; justify-content:center; }
@@ -193,7 +225,7 @@ h1 span { color:var(--gold); font-style:italic; }
 /* ── NEW GAME MODAL ── */
 .ng-box {
   background:var(--surface); border:1px solid var(--gold); border-radius:4px;
-  padding:32px 36px; text-align:center; max-width:400px; width:90%;
+  padding:32px 36px; text-align:center; max-width:440px; width:90%;
 }
 .ng-box h2 { font-family:'Playfair Display',serif; font-size:26px; font-weight:900; color:var(--gold); margin-bottom:24px; }
 .ng-box .cfg-label { text-align:left; }
@@ -203,7 +235,6 @@ h1 span { color:var(--gold); font-style:italic; }
 .ng-box-inner { position:relative; }
 
 /* ── RESIGN BUTTON ── */
-.board-wrap { position:relative; }
 .resign-btn {
   position:absolute; bottom:28px; right:-42px;
   width:34px; height:34px;
@@ -235,6 +266,18 @@ h1 span { color:var(--gold); font-style:italic; }
 .rc-btn.yes:hover { background:var(--red); color:#fff; }
 .rc-btn.no:hover  { border-color:var(--cream); color:var(--cream); }
 
+/* ── ARROW OVERLAY ── */
+#arrow-overlay {
+  position:absolute;
+  top:0; left:0;
+  width:var(--board-size);
+  height:var(--board-size);
+  pointer-events:none;
+  z-index:20;
+  overflow:visible;
+}
+/* border offset: the board has a 2px border, overlay sits inside it */
+
 @media(max-width:680px) {
   .game-layout { flex-direction:column; align-items:center; }
   .sidebar { width:var(--board-size); flex-direction:row; flex-wrap:wrap; }
@@ -248,8 +291,8 @@ h1 span { color:var(--gold); font-style:italic; }
 <!-- ═══ HOME SCREEN ═══ -->
 <div id="home-screen" class="screen active">
   <div class="home-header">
-    <div class="eyebrow">Chess Trainer</div>
-    <h1>Middlegame<br><span>Battleground</span></h1>
+    <div class="eyebrow">Chess</div>
+    <h1>Middlegame<br><span>Trainer</span></h1>
     <p class="subtitle">Step straight into balanced, equal positions and<br>prove your middlegame mastery.</p>
   </div>
   <div class="config-panel">
@@ -266,6 +309,18 @@ h1 span { color:var(--gold); font-style:italic; }
         <button class="diff-btn active" data-diff="easy"   onclick="homeSelectDiff('easy')">Easy</button>
         <button class="diff-btn"        data-diff="normal" onclick="homeSelectDiff('normal')">Normal</button>
         <button class="diff-btn"        data-diff="hard"   onclick="homeSelectDiff('hard')">Hard</button>
+        <button class="diff-btn"        data-diff="expert" onclick="homeSelectDiff('expert')">Expert</button>
+      </div>
+    </div>
+    <div class="cfg-group">
+      <div class="cfg-label">Time Control</div>
+      <div class="tc-row">
+        <button class="tc-btn" data-tc="1+0"  onclick="homeSelectTC('1+0')">1 min</button>
+        <button class="tc-btn" data-tc="2+1"  onclick="homeSelectTC('2+1')">2 | 1</button>
+        <button class="tc-btn" data-tc="3+2"  onclick="homeSelectTC('3+2')">3 | 2</button>
+        <button class="tc-btn" data-tc="5+0"  onclick="homeSelectTC('5+0')">5 min</button>
+        <button class="tc-btn" data-tc="10+0" onclick="homeSelectTC('10+0')">10 min</button>
+        <button class="tc-btn active" data-tc="none" onclick="homeSelectTC('none')">None</button>
       </div>
     </div>
     <button class="gen-btn" onclick="homeGenerate()">Generate Middlegame →</button>
@@ -275,7 +330,7 @@ h1 span { color:var(--gold); font-style:italic; }
 <!-- ═══ GAME SCREEN ═══ -->
 <div id="game-screen" class="screen">
   <div class="topbar">
-    <div class="logo">Middlegame Trainer</div>
+    <div class="logo">Middlegame</div>
     <div class="topbar-btns">
       <button class="top-btn active-toggle" id="btn-hints" onclick="toggleHints()">Hide Moves</button>
       <button class="top-btn" id="btn-eval"  onclick="toggleEval()">Show Eval</button>
@@ -287,9 +342,36 @@ h1 span { color:var(--gold); font-style:italic; }
 
   <div class="game-layout">
     <div class="board-wrap">
-      <div class="player-lbl"><span class="pip" id="top-pip"></span>&nbsp;<span id="top-name">Computer</span></div>
-      <div id="chessboard"></div>
-      <div class="player-lbl"><span class="pip" id="bot-pip"></span>&nbsp;<span id="bot-name">You</span></div>
+      <!-- Top player (computer) -->
+      <div class="player-lbl">
+        <div class="player-lbl-left"><span class="pip" id="top-pip"></span>&nbsp;<span id="top-name">Computer</span></div>
+        <div class="timer-display hidden" id="top-timer">—</div>
+      </div>
+      <!-- Board + arrow overlay wrapper -->
+      <div style="position:relative;width:var(--board-size);height:var(--board-size);flex-shrink:0;">
+        <div id="chessboard"></div>
+        <svg id="arrow-overlay" viewBox="0 0 8 8" xmlns="http://www.w3.org/2000/svg"
+             style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:20;overflow:visible;">
+          <defs>
+            <marker id="arrowhead" markerWidth="4" markerHeight="4" refX="2.5" refY="2" orient="auto">
+              <polygon points="0 0, 4 2, 0 4" fill="rgba(255,170,0,0.9)"/>
+            </marker>
+            <marker id="arrowhead-preview" markerWidth="4" markerHeight="4" refX="2.5" refY="2" orient="auto">
+              <polygon points="0 0, 4 2, 0 4" fill="rgba(255,170,0,0.55)"/>
+            </marker>
+          </defs>
+          <g id="arrow-group"></g>
+          <line id="arrow-preview" x1="0" y1="0" x2="0" y2="0"
+                stroke="rgba(255,170,0,0.55)" stroke-width="0.22"
+                stroke-linecap="round" marker-end="url(#arrowhead-preview)"
+                style="display:none;pointer-events:none;"/>
+        </svg>
+      </div>
+      <!-- Bottom player (you) + timer -->
+      <div class="player-lbl">
+        <div class="player-lbl-left"><span class="pip" id="bot-pip"></span>&nbsp;<span id="bot-name">You</span></div>
+        <div class="timer-display hidden" id="bot-timer">0:00</div>
+      </div>
       <button class="resign-btn" id="resign-btn" onclick="onResignClick(event)" title="Resign">🏳</button>
     </div>
     <div class="sidebar">
@@ -306,9 +388,10 @@ h1 span { color:var(--gold); font-style:italic; }
           </div>
         </div>
       </div>
-      <div class="card">
+      <div class="card" id="history-card" onclick="onHistoryCardClick(event)">
         <div class="card-title">Move History</div>
         <div class="move-list" id="move-list"></div>
+        <div class="browse-hint" id="browse-hint" style="display:none">← → arrows to navigate · click away to exit</div>
       </div>
     </div>
   </div>
@@ -354,6 +437,18 @@ h1 span { color:var(--gold); font-style:italic; }
           <button class="diff-btn active" data-ng-diff="easy"   onclick="ngSelectDiff('easy')">Easy</button>
           <button class="diff-btn"        data-ng-diff="normal" onclick="ngSelectDiff('normal')">Normal</button>
           <button class="diff-btn"        data-ng-diff="hard"   onclick="ngSelectDiff('hard')">Hard</button>
+          <button class="diff-btn"        data-ng-diff="expert" onclick="ngSelectDiff('expert')">Expert</button>
+        </div>
+      </div>
+      <div class="cfg-group">
+        <div class="cfg-label">Time Control</div>
+        <div class="tc-row">
+          <button class="tc-btn" data-ng-tc="1+0"  onclick="ngSelectTC('1+0')">1 min</button>
+          <button class="tc-btn" data-ng-tc="2+1"  onclick="ngSelectTC('2+1')">2 | 1</button>
+          <button class="tc-btn" data-ng-tc="3+2"  onclick="ngSelectTC('3+2')">3 | 2</button>
+          <button class="tc-btn" data-ng-tc="5+0"  onclick="ngSelectTC('5+0')">5 min</button>
+          <button class="tc-btn" data-ng-tc="10+0" onclick="ngSelectTC('10+0')">10 min</button>
+          <button class="tc-btn active" data-ng-tc="none" onclick="ngSelectTC('none')">None</button>
         </div>
       </div>
       <button class="gen-btn" onclick="ngGenerate()">Generate Middlegame →</button>
@@ -536,28 +631,74 @@ class Chess {
 }
 
 // ════════════════════════════════════════════════════════════
-//  MINIMAX AI
+//  MINIMAX AI  — now includes Expert depth
 // ════════════════════════════════════════════════════════════
 function evalBoard(chess){
   let score=0;
   for(let s=0;s<128;s++){if(!valid(s))continue;const p=chess.board[s];if(!p)continue;const v=TYPE_TO_VAL[p.t]+(PST[p.t]?PST[p.t][pstIdx(s,p.c)]:0);score+=p.c===W?v:-v;}
   return chess.turn===W?score:-score;
 }
-function minimax(chess,depth,alpha,beta){
-  if(depth===0)return evalBoard(chess);
+
+// Quiescence search for Expert — searches captures only to avoid horizon effect
+function quiesce(chess,alpha,beta,depth){
+  const stand=evalBoard(chess);
+  if(stand>=beta)return beta;
+  if(stand>alpha)alpha=stand;
+  if(depth===0)return alpha;
+  const moves=chess.moves().filter(m=>m.flags.includes('c'));
+  moves.sort((a,b)=>b.flags.includes('c')-a.flags.includes('c'));
+  for(const mv of moves){
+    const u=chess._apply(mv._raw);
+    const sc=-quiesce(chess,-beta,-alpha,depth-1);
+    chess._undo(mv._raw,u);
+    if(sc>=beta)return beta;
+    if(sc>alpha)alpha=sc;
+  }
+  return alpha;
+}
+
+function minimax(chess,depth,alpha,beta,useQuiesce){
+  if(depth===0) return useQuiesce ? quiesce(chess,alpha,beta,2) : evalBoard(chess);
   const moves=chess.moves();
   if(!moves.length)return chess._inCheck(chess.turn)?-99999:0;
-  moves.sort((a,b)=>b.flags.includes('c')-a.flags.includes('c'));
+  // Move ordering: captures first, then checks
+  moves.sort((a,b)=>(b.flags.includes('c')?1:0)-(a.flags.includes('c')?1:0));
   let best=-Infinity;
-  for(const mv of moves){const u=chess._apply(mv._raw);const sc=-minimax(chess,depth-1,-beta,-alpha);chess._undo(mv._raw,u);if(sc>best)best=sc;if(sc>alpha)alpha=sc;if(alpha>=beta)break;}
+  for(const mv of moves){
+    const u=chess._apply(mv._raw);
+    const sc=-minimax(chess,depth-1,-beta,-alpha,useQuiesce);
+    chess._undo(mv._raw,u);
+    if(sc>best)best=sc;
+    if(sc>alpha)alpha=sc;
+    if(alpha>=beta)break;
+  }
   return best;
 }
-const DIFF={easy:{depth:1,rng:.5,noise:90},normal:{depth:3,rng:0,noise:15},hard:{depth:5,rng:0,noise:0}};
+
+// depth, rng (random move chance), noise (centipawn randomness), quiesce (use quiescence search)
+// Expert uses depth 4 + shallow quiescence (depth 2) — stronger than Hard but same speed
+const DIFF={
+  easy:  {depth:1,rng:.5, noise:90, quiesce:false},
+  normal:{depth:3,rng:0,  noise:15, quiesce:false},
+  hard:  {depth:5,rng:0,  noise:0,  quiesce:false},
+  expert:{depth:4,rng:0,  noise:0,  quiesce:true },
+};
+
+// Uniform thinking pause for all difficulties
+const THINK_DELAY = {easy:1000, normal:1000, hard:1000, expert:1000};
+
 function getBestMove(chess,diff){
   const moves=chess.moves();if(!moves.length)return null;
-  const cfg=DIFF[diff];if(Math.random()<cfg.rng)return moves[Math.floor(Math.random()*moves.length)];
+  const cfg=DIFF[diff];
+  if(Math.random()<cfg.rng)return moves[Math.floor(Math.random()*moves.length)];
   let bestScore=-Infinity,bestM=moves[0];
-  for(const mv of moves){const u=chess._apply(mv._raw);let sc=-minimax(chess,cfg.depth-1,-Infinity,Infinity);chess._undo(mv._raw,u);sc+=Math.random()*cfg.noise-cfg.noise/2;if(sc>bestScore){bestScore=sc;bestM=mv;}}
+  for(const mv of moves){
+    const u=chess._apply(mv._raw);
+    let sc=-minimax(chess,cfg.depth-1,-Infinity,Infinity,cfg.quiesce);
+    chess._undo(mv._raw,u);
+    sc+=Math.random()*cfg.noise-cfg.noise/2;
+    if(sc>bestScore){bestScore=sc;bestM=mv;}
+  }
   return bestM;
 }
 
@@ -582,345 +723,131 @@ function pieceKey(p){ return (p.c===W?'w':'b')+TYPE_TO_CHAR[p.t].toUpperCase(); 
 
 // ════════════════════════════════════════════════════════════
 //  PROCEDURAL POSITION GENERATOR
-//  Plays out a realistic pseudo-random opening/middlegame
-//  using a weighted opening book + heuristic move selection.
-//  Produces a unique position every time — no fixed list.
-//  25 curated FENs are kept as a fallback only.
 // ════════════════════════════════════════════════════════════
-
-// ── Opening book: [from, to, weight] triples ──
-// Higher weight = more likely to be chosen.
-// Covers all major first moves and common replies up to ply 8.
 const BOOK = {
-  // key = position hash of piece placement (simplified: just move number + last moves)
-  // We use a flat weighted list per ply instead of a tree, for simplicity.
-  // Format: [ply, from, to, weight]  (ply 0 = White's first move)
-  0: [ // White's 1st move
-    ['e2','e4',40], ['d2','d4',35], ['c2','c4',15], ['g1','f3',8], ['b1','c3',2]
-  ],
-  1: [ // Black's 1st move (after e4)
-    ['e7','e5',30], ['c7','c5',28], ['e7','e6',15], ['c7','c6',12],
-    ['g8','f6',8],  ['d7','d6',5],  ['d7','d5',2]
-  ],
-  1.1: [ // Black after d4
-    ['d7','d5',30], ['g8','f6',28], ['e7','e6',15], ['c7','c5',12],
-    ['f7','f5',5],  ['c7','c6',10]
-  ],
-  1.2: [ // Black after c4
-    ['e7','e5',20], ['g8','f6',25], ['c7','c5',20], ['e7','e6',20], ['c7','c6',15]
-  ],
-  1.3: [ // Black after Nf3
-    ['d7','d5',30], ['g8','f6',25], ['c7','c5',20], ['e7','e6',15], ['d7','d6',10]
-  ],
+  0: [['e2','e4',40],['d2','d4',35],['c2','c4',15],['g1','f3',8],['b1','c3',2]],
+  1: [['e7','e5',30],['c7','c5',28],['e7','e6',15],['c7','c6',12],['g8','f6',8],['d7','d6',5],['d7','d5',2]],
+  1.1:[['d7','d5',30],['g8','f6',28],['e7','e6',15],['c7','c5',12],['f7','f5',5],['c7','c6',10]],
+  1.2:[['e7','e5',20],['g8','f6',25],['c7','c5',20],['e7','e6',20],['c7','c6',15]],
+  1.3:[['d7','d5',30],['g8','f6',25],['c7','c5',20],['e7','e6',15],['d7','d6',10]],
 };
 
-// Comprehensive book of sensible moves by piece type and situation
-// These are used after the opening book runs out (ply 8+)
-// to guide move selection toward realistic middlegame play.
-
-function generatePosition() {
-  // Try up to 8 times to get a good position
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const fen = _tryGenerate();
-    if (fen) return fen;
-  }
-  // Fallback to a curated position
-  return FALLBACK_FENS[Math.floor(Math.random() * FALLBACK_FENS.length)];
+function generatePosition(){
+  for(let a=0;a<8;a++){const f=_tryGenerate();if(f)return f;}
+  return FALLBACK_FENS[Math.floor(Math.random()*FALLBACK_FENS.length)];
 }
-
-function _tryGenerate() {
-  const gen = new Chess('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
-
-  // Target: stop between move 10 and 22, with a random distribution
-  // weighted toward 12-17 (true middlegame)
-  const targetPly = _randRange(20, 40); // plies (half-moves)
-
-  // Track opening context for book lookups
-  let lastWhite = '', lastBlack = '', plyCount = 0;
-  let openingChoice = ''; // 'e4','d4','c4','nf3' etc
-
-  for (let ply = 0; ply < targetPly; ply++) {
-    if (gen.isGameOver()) return null; // abandoned position
-
-    const moves = gen.moves();
-    if (!moves.length) return null;
-
-    let chosen = null;
-
-    // ── Phase 1: Opening book (plies 0-7) ──
-    if (ply <= 7) {
-      chosen = _bookMove(gen, ply, openingChoice, lastWhite, lastBlack);
-      if (ply === 0 && chosen) openingChoice = chosen.to; // remember e4/d4 etc
-      if (ply === 1 && chosen) lastBlack = chosen.to;
-      if (ply === 2 && chosen) lastWhite = chosen.to;
-    }
-
-    // ── Phase 2: Heuristic development (plies 8-19) ──
-    if (!chosen && ply <= 19) {
-      chosen = _heuristicMove(gen, ply, moves);
-    }
-
-    // ── Phase 3: Random with pruning (plies 20+) ──
-    if (!chosen) {
-      chosen = _prunedRandom(gen, moves);
-    }
-
-    if (!chosen) chosen = moves[Math.floor(Math.random() * moves.length)];
-
-    const result = gen.move({ from: chosen.from, to: chosen.to, promotion: chosen.promotion || 'q' });
-    if (!result) {
-      // move failed, pick random
-      const fallback = moves[Math.floor(Math.random() * moves.length)];
-      gen.move({ from: fallback.from, to: fallback.to, promotion: 'q' });
-    }
-    plyCount++;
+function _tryGenerate(){
+  const gen=new Chess('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+  const targetPly=_randRange(20,40);
+  let openingChoice='';
+  for(let ply=0;ply<targetPly;ply++){
+    if(gen.isGameOver())return null;
+    const moves=gen.moves();if(!moves.length)return null;
+    let chosen=null;
+    if(ply<=7){chosen=_bookMove(gen,ply,openingChoice);if(ply===0&&chosen)openingChoice=chosen.to;}
+    if(!chosen&&ply<=19)chosen=_heuristicMove(gen,ply,moves);
+    if(!chosen)chosen=_prunedRandom(gen,moves);
+    if(!chosen)chosen=moves[Math.floor(Math.random()*moves.length)];
+    const result=gen.move({from:chosen.from,to:chosen.to,promotion:'q'});
+    if(!result){const fb=moves[Math.floor(Math.random()*moves.length)];gen.move({from:fb.from,to:fb.to,promotion:'q'});}
   }
-
-  // Validate the generated position
-  if (!_isAcceptablePosition(gen)) return null;
-
+  if(!_isAcceptablePosition(gen))return null;
   return _toFen(gen);
 }
-
-function _bookMove(gen, ply, openingChoice, lastWhite, lastBlack) {
-  // Ply 0: white's first move
-  if (ply === 0) return _weighted(BOOK[0]);
-
-  // Ply 1: black replies based on white's first move
-  if (ply === 1) {
-    const book = openingChoice === 'e4' ? BOOK[1] :
-                 openingChoice === 'd4' ? BOOK[1.1] :
-                 openingChoice === 'c4' ? BOOK[1.2] : BOOK[1.3];
-    return _weighted(book || BOOK[1]);
-  }
-
-  // Plies 2-7: use sensible piece development book
-  return _developmentBook(gen, ply);
+function _bookMove(gen,ply,openingChoice){
+  if(ply===0)return _weighted(BOOK[0]);
+  if(ply===1){const bk=openingChoice==='e4'?BOOK[1]:openingChoice==='d4'?BOOK[1.1]:openingChoice==='c4'?BOOK[1.2]:BOOK[1.3];return _weighted(bk||BOOK[1]);}
+  return _developmentBook(gen,ply);
 }
-
-function _developmentBook(gen, ply) {
-  const color = gen.turn;
-  const moves = gen.moves();
-  const board = gen.board;
-
-  // Priority order: castle if possible, develop knights/bishops,
-  // push central pawns, connect rooks
-  const scored = moves.map(m => {
-    let score = Math.random() * 20; // base randomness
-    const from = parseSq(m.from), to = parseSq(m.to);
-    const piece = board[from];
-    if (!piece) return { m, score };
-
-    const toFile = fileOf(to), toRank = rankOf(to);
-    const fromFile = fileOf(from), fromRank = rankOf(from);
-
-    // Castling: very high priority if not yet castled
-    if (m.flags.includes('k') || m.flags.includes('k')) score += 80;
-
-    // Develop knights to good squares
-    if (piece.t === N) {
-      if (color === W && fromRank === 0) score += 50; // develop from back rank
-      if (color === B && fromRank === 7) score += 50;
-      // Good knight squares: f3,c3,f6,c6,d4,d5,e4,e5
-      if ([2,3,4,5].includes(toFile) && [2,3,4,5].includes(toRank)) score += 30;
-    }
-
-    // Develop bishops
-    if (piece.t === Bi) {
-      if (color === W && fromRank === 0) score += 45;
-      if (color === B && fromRank === 7) score += 45;
-      // Active diagonals
-      if ([2,3,4,5].includes(toFile)) score += 20;
-    }
-
-    // Central pawn pushes (e,d files, ranks 3-4 for white, 4-5 for black)
-    if (piece.t === P) {
-      if ([3,4].includes(toFile)) { // d,e files
-        if (color === W && toRank >= 3) score += 40;
-        if (color === B && toRank <= 4) score += 40;
-      }
-      // Don't push flank pawns early
-      if ([0,7].includes(toFile) && ply < 6) score -= 20;
-    }
-
-    // Don't move queen early
-    if (piece.t === Q && ply < 6) score -= 40;
-
-    // Don't move rooks before castling (check if castling rights exist)
-    if (piece.t === R && ply < 8) score -= 30;
-
-    // Captures are generally good
-    if (m.flags.includes('c')) score += 25;
-
-    return { m, score };
+function _developmentBook(gen,ply){
+  const color=gen.turn,moves=gen.moves(),board=gen.board;
+  const scored=moves.map(m=>{
+    let score=Math.random()*20;
+    const from=parseSq(m.from),to=parseSq(m.to),piece=board[from];
+    if(!piece)return{m,score};
+    const toFile=fileOf(to),toRank=rankOf(to);
+    if(m.flags.includes('k')||m.flags.includes('q'))score+=80;
+    if(piece.t===N){if(color===W&&rankOf(from)===0)score+=50;if(color===B&&rankOf(from)===7)score+=50;if([2,3,4,5].includes(toFile)&&[2,3,4,5].includes(toRank))score+=30;}
+    if(piece.t===Bi){if(color===W&&rankOf(from)===0)score+=45;if(color===B&&rankOf(from)===7)score+=45;if([2,3,4,5].includes(toFile))score+=20;}
+    if(piece.t===P){if([3,4].includes(toFile)){if(color===W&&toRank>=3)score+=40;if(color===B&&toRank<=4)score+=40;}if([0,7].includes(toFile)&&ply<6)score-=20;}
+    if(piece.t===Q&&ply<6)score-=40;
+    if(piece.t===R&&ply<8)score-=30;
+    if(m.flags.includes('c'))score+=25;
+    return{m,score};
   });
-
-  scored.sort((a, b) => b.score - a.score);
-  // Pick from top 3 with weighted randomness
-  const pool = scored.slice(0, Math.min(4, scored.length));
-  const total = pool.reduce((s, x) => s + Math.max(0, x.score), 0);
-  if (total <= 0) return pool[0]?.m || null;
-  let r = Math.random() * total;
-  for (const { m, score } of pool) {
-    r -= Math.max(0, score);
-    if (r <= 0) return m;
-  }
-  return pool[0]?.m || null;
+  scored.sort((a,b)=>b.score-a.score);
+  const pool=scored.slice(0,Math.min(4,scored.length));
+  const total=pool.reduce((s,x)=>s+Math.max(0,x.score),0);
+  if(total<=0)return pool[0]?.m||null;
+  let r=Math.random()*total;
+  for(const{m,score}of pool){r-=Math.max(0,score);if(r<=0)return m;}
+  return pool[0]?.m||null;
 }
-
-function _heuristicMove(gen, ply, moves) {
-  // After opening: maintain sensible play
-  // Avoid clearly bad moves, prefer active pieces
-  const board = gen.board;
-  const color = gen.turn;
-
-  const scored = moves.map(m => {
-    let score = Math.random() * 30;
-    const from = parseSq(m.from), to = parseSq(m.to);
-    const piece = board[from];
-    if (!piece) return { m, score };
-
-    const toFile = fileOf(to), toRank = rankOf(to);
-
-    // Captures are generally good
-    if (m.flags.includes('c')) {
-      const captured = board[to];
-      if (captured) score += TYPE_TO_VAL[captured.t] / 20;
-      score += 20;
-    }
-
-    // Castling still good if haven't done it
-    if (m.flags.includes('k') || m.flags.includes('q')) score += 60;
-
-    // Central control
-    if ([3,4].includes(toFile) && [3,4].includes(toRank)) score += 15;
-
-    // Knight on rim is dim
-    if (piece.t === N && ([0,7].includes(toFile) || (color===W?toRank<=1:toRank>=6))) score -= 25;
-
-    // Don't shuffle already developed pieces too much
-    if (piece.t !== P && piece.t !== K) {
-      const homeRank = color === W ? 0 : 7;
-      if (rankOf(from) !== homeRank) score -= 5; // slight penalty for re-moving
-    }
-
-    // Pawn advances
-    if (piece.t === P) {
-      if (color === W && toRank >= 4) score += 10;
-      if (color === B && toRank <= 3) score += 10;
-    }
-
-    return { m, score };
+function _heuristicMove(gen,ply,moves){
+  const board=gen.board,color=gen.turn;
+  const scored=moves.map(m=>{
+    let score=Math.random()*30;
+    const from=parseSq(m.from),to=parseSq(m.to),piece=board[from];
+    if(!piece)return{m,score};
+    const toFile=fileOf(to),toRank=rankOf(to);
+    if(m.flags.includes('c')){const cap=board[to];if(cap)score+=TYPE_TO_VAL[cap.t]/20;score+=20;}
+    if(m.flags.includes('k')||m.flags.includes('q'))score+=60;
+    if([3,4].includes(toFile)&&[3,4].includes(toRank))score+=15;
+    if(piece.t===N&&([0,7].includes(toFile)||(color===W?toRank<=1:toRank>=6)))score-=25;
+    if(piece.t===P){if(color===W&&toRank>=4)score+=10;if(color===B&&toRank<=3)score+=10;}
+    return{m,score};
   });
-
-  scored.sort((a, b) => b.score - a.score);
-  const pool = scored.slice(0, Math.min(5, scored.length));
-  const total = pool.reduce((s, x) => s + Math.max(1, x.score), 0);
-  let r = Math.random() * total;
-  for (const { m, score } of pool) {
-    r -= Math.max(1, score);
-    if (r <= 0) return m;
-  }
-  return pool[0]?.m || null;
+  scored.sort((a,b)=>b.score-a.score);
+  const pool=scored.slice(0,Math.min(5,scored.length));
+  const total=pool.reduce((s,x)=>s+Math.max(1,x.score),0);
+  let r=Math.random()*total;
+  for(const{m,score}of pool){r-=Math.max(1,score);if(r<=0)return m;}
+  return pool[0]?.m||null;
 }
-
-function _prunedRandom(gen, moves) {
-  // Fully random but filter out completely absurd moves
-  const board = gen.board;
-  const color = gen.turn;
-  const filtered = moves.filter(m => {
-    const from = parseSq(m.from);
-    const piece = board[from];
-    if (!piece) return true;
-    // Don't move king to centre in middlegame
-    if (piece.t === K && !m.flags.includes('k') && !m.flags.includes('q')) {
-      const to = parseSq(m.to);
-      if ([3,4].includes(fileOf(to)) && [2,3,4,5].includes(rankOf(to))) return false;
-    }
+function _prunedRandom(gen,moves){
+  const board=gen.board,color=gen.turn;
+  const filtered=moves.filter(m=>{
+    const from=parseSq(m.from),piece=board[from];
+    if(!piece)return true;
+    if(piece.t===K&&!m.flags.includes('k')&&!m.flags.includes('q')){const to=parseSq(m.to);if([3,4].includes(fileOf(to))&&[2,3,4,5].includes(rankOf(to)))return false;}
     return true;
   });
-  const pool = filtered.length ? filtered : moves;
-  return pool[Math.floor(Math.random() * pool.length)];
+  const pool=filtered.length?filtered:moves;
+  return pool[Math.floor(Math.random()*pool.length)];
 }
-
-function _weighted(list) {
-  if (!list || !list.length) return null;
-  const total = list.reduce((s, x) => s + x[2], 0);
-  let r = Math.random() * total;
-  for (const [from, to, weight] of list) {
-    r -= weight;
-    if (r <= 0) return { from, to };
-  }
-  return { from: list[0][0], to: list[0][1] };
+function _weighted(list){
+  if(!list||!list.length)return null;
+  const total=list.reduce((s,x)=>s+x[2],0);
+  let r=Math.random()*total;
+  for(const[from,to,weight]of list){r-=weight;if(r<=0)return{from,to};}
+  return{from:list[0][0],to:list[0][1]};
 }
-
-function _randRange(min, max) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-function _isAcceptablePosition(gen) {
-  if (gen.isGameOver()) return false;
-  if (gen.isCheck()) return false; // don't start in check
-
-  // Count material imbalance — reject if too lopsided (>9 pawn equivalents)
-  let score = 0;
-  for (let s = 0; s < 128; s++) {
-    if (!valid(s)) continue;
-    const p = gen.board[s];
-    if (!p || p.t === K) continue;
-    score += p.c === W ? TYPE_TO_VAL[p.t] : -TYPE_TO_VAL[p.t];
-  }
-  if (Math.abs(score) > 900) return false; // more than a minor piece imbalance
-
-  // Must have at least 10 total pieces (not too simplified)
-  let total = 0;
-  for (let s = 0; s < 128; s++) {
-    if (valid(s) && gen.board[s]) total++;
-  }
-  if (total < 10) return false;
-
-  // Must have legal moves available
-  if (gen.moves().length < 5) return false;
-
+function _randRange(min,max){return Math.floor(Math.random()*(max-min+1))+min;}
+function _isAcceptablePosition(gen){
+  if(gen.isGameOver()||gen.isCheck())return false;
+  let score=0,total=0;
+  for(let s=0;s<128;s++){if(!valid(s))continue;const p=gen.board[s];if(!p)continue;total++;if(p.t!==K)score+=p.c===W?TYPE_TO_VAL[p.t]:-TYPE_TO_VAL[p.t];}
+  if(Math.abs(score)>900||total<10)return false;
+  if(gen.moves().length<5)return false;
   return true;
 }
-
-function _toFen(gen) {
-  // Reconstruct FEN string from the Chess object
-  const board = gen.board;
-  let fen = '';
-  for (let r = 7; r >= 0; r--) {
-    let empty = 0;
-    for (let f = 0; f < 8; f++) {
-      const p = board[sq(f, r)];
-      if (!p) { empty++; continue; }
-      if (empty) { fen += empty; empty = 0; }
-      const ch = TYPE_TO_CHAR[p.t];
-      fen += p.c === W ? ch.toUpperCase() : ch;
-    }
-    if (empty) fen += empty;
-    if (r > 0) fen += '/';
+function _toFen(gen){
+  const board=gen.board;let fen='';
+  for(let r=7;r>=0;r--){
+    let empty=0;
+    for(let f=0;f<8;f++){const p=board[sq(f,r)];if(!p){empty++;continue;}if(empty){fen+=empty;empty=0;}const ch=TYPE_TO_CHAR[p.t];fen+=p.c===W?ch.toUpperCase():ch;}
+    if(empty)fen+=empty;if(r>0)fen+='/';
   }
-  fen += ' ' + (gen.turn === W ? 'w' : 'b');
-  let castle = '';
-  if (gen.castling.WK) castle += 'K';
-  if (gen.castling.WQ) castle += 'Q';
-  if (gen.castling.BK) castle += 'k';
-  if (gen.castling.BQ) castle += 'q';
-  fen += ' ' + (castle || '-');
-  fen += ' ' + (gen.ep !== null ? sqN(gen.ep) : '-');
-  fen += ' ' + gen.halfmove + ' ' + gen.fullmove;
+  fen+=' '+(gen.turn===W?'w':'b');
+  let castle='';if(gen.castling.WK)castle+='K';if(gen.castling.WQ)castle+='Q';if(gen.castling.BK)castle+='k';if(gen.castling.BQ)castle+='q';
+  fen+=' '+(castle||'-')+' '+(gen.ep!==null?sqN(gen.ep):'-')+' '+gen.halfmove+' '+gen.fullmove;
   return fen;
 }
-
-// ── Fallback curated positions (used only if generation fails) ──
-const FALLBACK_FENS = [
+const FALLBACK_FENS=[
   "r1bq1rk1/2p1bppp/p1np1n2/1p2p3/3PP3/1BP2N2/PP3PPP/RNBQR1K1 w - - 0 11",
   "r1b2rk1/1p2bppp/p1n1pn2/q1pp4/3P1B2/2NBPN2/PP3PPP/R2QK2R w KQ - 2 11",
   "r1bq1rk1/ppp2pbp/2np1np1/4p3/2PPP3/2N2N2/PP2BPPP/R1BQK2R w KQ - 0 9",
   "r2q1rk1/ppp1bppp/2np1n2/4p3/2PPP3/2N2N2/PP2BPPP/R1BQR1K1 w - - 1 10",
-  "r1bq1rk1/1p2bppp/p1np1n2/4p3/2P1P3/2NP1N2/PP2BPPP/R1BQR1K1 w - - 0 11",
-  "r2q1rk1/pp2ppbp/2p2np1/3p1b2/2PP4/2N1PN2/PP2BPPP/R1BQK2R w KQ - 2 10",
   "r2qr1k1/pp2bppp/2n1pn2/3p4/3P4/2NBPN2/PP3PPP/R2QR1K1 w - - 2 13",
   "2r1r1k1/pp1q1ppp/2np1n2/2b1p3/2B1P3/2NP1N2/PP1Q1PPP/R3R1K1 w - - 3 14",
   "r2q1rk1/pp1b1ppp/2nbpn2/3p4/2PP4/2N1PN2/PPB2PPP/R1BQR1K1 w - - 2 12",
@@ -931,13 +858,123 @@ const FALLBACK_FENS = [
 //  GAME STATE
 // ════════════════════════════════════════════════════════════
 let game=null, playerColor='white', difficulty='easy';
-let currentFen='';           // FEN of the starting position (for Restart)
+let currentFen='';
 let selectedSq=null, legalMoves=[], lastMove=null, moveHistory=[];
+// moveHistory entries: {san, from, to, fenAfter}
 let isThinking=false, pendingPromo=null;
-let showHints=true, showEval=false;  // hints ON by default
+let showHints=true, showEval=false;
+
+// Time control
+let timeControl='none'; // '1+0','2+1','3+2','5+0','10+0','none'
+let playerTimeMs=0;     // remaining ms for player
+let compTimeMs=0;       // remaining ms for computer
+let timerInterval=null; // player timer interval handle
+let compTimerInterval=null; // computer timer interval handle
+let incrementMs=0;      // ms to add per move
+
+// History browsing
+let browseIdx=-1;       // -1 = live, >=0 = viewing past position
+let browseGame=null;    // Chess instance replayed to browseIdx
 
 // New-game modal pending selections
-let ngColor='white', ngDiff='easy';
+let ngColor='white', ngDiff='easy', ngTC='none';
+
+// ════════════════════════════════════════════════════════════
+//  TIME CONTROL HELPERS
+// ════════════════════════════════════════════════════════════
+const TC_CONFIG = {
+  'none': {initialMs:0,        incrementMs:0},
+  '1+0':  {initialMs:1*60000,  incrementMs:0},
+  '2+1':  {initialMs:2*60000,  incrementMs:1000},
+  '3+2':  {initialMs:3*60000,  incrementMs:2000},
+  '5+0':  {initialMs:5*60000,  incrementMs:0},
+  '10+0': {initialMs:10*60000, incrementMs:0},
+};
+
+function formatTime(ms){
+  if(ms<=0)return'0:00';
+  const totalSec=Math.ceil(ms/1000);
+  const m=Math.floor(totalSec/60);
+  const s=totalSec%60;
+  return m+':'+(s<10?'0':'')+s;
+}
+
+// ── Player timer ──
+function startPlayerTimer(){
+  stopPlayerTimer();
+  if(timeControl==='none'||playerTimeMs<=0)return;
+  timerInterval=setInterval(()=>{
+    playerTimeMs-=100;
+    _updateClockEl('bot-timer',playerTimeMs);
+    if(playerTimeMs<=0){playerTimeMs=0;stopPlayerTimer();onPlayerTimeout();}
+  },100);
+}
+function stopPlayerTimer(){
+  if(timerInterval){clearInterval(timerInterval);timerInterval=null;}
+}
+// kept for call-site compatibility
+function startTimer(){ startPlayerTimer(); }
+function stopTimer(){ stopPlayerTimer(); stopCompTimer(); }
+
+// ── Computer timer ──
+function startCompTimer(){
+  stopCompTimer();
+  if(timeControl==='none'||compTimeMs<=0)return;
+  compTimerInterval=setInterval(()=>{
+    compTimeMs-=100;
+    _updateClockEl('top-timer',compTimeMs);
+    if(compTimeMs<=0){compTimeMs=0;stopCompTimer();onCompTimeout();}
+  },100);
+}
+function stopCompTimer(){
+  if(compTimerInterval){clearInterval(compTimerInterval);compTimerInterval=null;}
+}
+
+// ── Shared clock element updater ──
+function _updateClockEl(id,ms){
+  const el=document.getElementById(id);
+  if(!el)return;
+  if(timeControl==='none'){el.classList.add('hidden');return;}
+  el.classList.remove('hidden');
+  el.textContent=formatTime(ms);
+  const sec=ms/1000;
+  el.classList.remove('active','warning','critical');
+  if(sec<=10)el.classList.add('critical');
+  else if(sec<=30)el.classList.add('warning');
+  else el.classList.add('active');
+}
+
+function updateTimerDisplay(){
+  _updateClockEl('bot-timer',playerTimeMs);
+  _updateClockEl('top-timer',compTimeMs);
+}
+
+function applyIncrement(){
+  if(timeControl==='none')return;
+  playerTimeMs+=incrementMs;
+}
+
+function stopAllTimers(){
+  stopPlayerTimer();
+  stopCompTimer();
+}
+
+function onPlayerTimeout(){
+  stopAllTimers();
+  const title=document.getElementById('r-title');
+  const desc=document.getElementById('r-desc');
+  title.textContent='⏱ Time Out';
+  desc.textContent='You ran out of time. Loss by timeout.';
+  document.getElementById('result-overlay').classList.add('active');
+}
+function onCompTimeout(){
+  stopAllTimers();
+  const title=document.getElementById('r-title');
+  const desc=document.getElementById('r-desc');
+  title.textContent='🏆 Victory!';
+  desc.textContent='Computer ran out of time. You win on time!';
+  document.getElementById('result-overlay').classList.add('active');
+}
 
 // ════════════════════════════════════════════════════════════
 //  HOME SCREEN CONTROLS
@@ -950,9 +987,13 @@ function homeSelectDiff(d){
   difficulty=d;
   document.querySelectorAll('[data-diff]').forEach(b=>b.classList.toggle('active',b.dataset.diff===d));
 }
+function homeSelectTC(tc){
+  timeControl=tc;
+  document.querySelectorAll('[data-tc]').forEach(b=>b.classList.toggle('active',b.dataset.tc===tc));
+}
 function homeGenerate(){
   const fen=generatePosition();
-  startGame(fen, playerColor, difficulty);
+  startGame(fen,playerColor,difficulty,timeControl);
 }
 
 // ════════════════════════════════════════════════════════════
@@ -963,7 +1004,7 @@ function toggleHints(){
   const btn=document.getElementById('btn-hints');
   btn.textContent=showHints?'Hide Moves':'Show Moves';
   btn.classList.toggle('active-toggle',showHints);
-  if(game) renderBoard();
+  if(game)renderBoard();
 }
 function toggleEval(){
   showEval=!showEval;
@@ -977,8 +1018,7 @@ function toggleEval(){
 //  NEW GAME MODAL
 // ════════════════════════════════════════════════════════════
 function openNewGame(){
-  // Sync modal to current settings as defaults
-  ngColor=playerColor; ngDiff=difficulty;
+  ngColor=playerColor; ngDiff=difficulty; ngTC=timeControl;
   _syncNgButtons();
   document.getElementById('ng-overlay').classList.add('active');
 }
@@ -986,44 +1026,42 @@ function openNewGameFromResult(){
   document.getElementById('result-overlay').classList.remove('active');
   openNewGame();
 }
-function closeNewGame(){
-  document.getElementById('ng-overlay').classList.remove('active');
-}
-function ngSelectColor(c){
-  ngColor=c;
-  document.querySelectorAll('[data-ng-color]').forEach(b=>b.classList.toggle('active',b.dataset.ngColor===c));
-}
-function ngSelectDiff(d){
-  ngDiff=d;
-  document.querySelectorAll('[data-ng-diff]').forEach(b=>b.classList.toggle('active',b.dataset.ngDiff===d));
-}
+function closeNewGame(){document.getElementById('ng-overlay').classList.remove('active');}
+function ngSelectColor(c){ngColor=c;document.querySelectorAll('[data-ng-color]').forEach(b=>b.classList.toggle('active',b.dataset.ngColor===c));}
+function ngSelectDiff(d){ngDiff=d;document.querySelectorAll('[data-ng-diff]').forEach(b=>b.classList.toggle('active',b.dataset.ngDiff===d));}
+function ngSelectTC(tc){ngTC=tc;document.querySelectorAll('[data-ng-tc]').forEach(b=>b.classList.toggle('active',b.dataset.ngTc===tc));}
 function ngGenerate(){
   document.getElementById('ng-overlay').classList.remove('active');
   const fen=generatePosition();
-  startGame(fen, ngColor, ngDiff);
+  startGame(fen,ngColor,ngDiff,ngTC);
 }
 function _syncNgButtons(){
   document.querySelectorAll('[data-ng-color]').forEach(b=>b.classList.toggle('active',b.dataset.ngColor===ngColor));
   document.querySelectorAll('[data-ng-diff]').forEach(b=>b.classList.toggle('active',b.dataset.ngDiff===ngDiff));
+  document.querySelectorAll('[data-ng-tc]').forEach(b=>b.classList.toggle('active',b.dataset.ngTc===ngTC));
 }
-// Close new-game modal if backdrop clicked
-document.getElementById('ng-overlay').addEventListener('click', function(e){
-  if(e.target===this) closeNewGame();
-});
+document.getElementById('ng-overlay').addEventListener('click',function(e){if(e.target===this)closeNewGame();});
 
 // ════════════════════════════════════════════════════════════
 //  START GAME
 // ════════════════════════════════════════════════════════════
-function startGame(fen, color, diff){
-  currentFen = fen;          // save for Restart
-  playerColor = color;
-  difficulty  = diff;
+function startGame(fen,color,diff,tc){
+  stopTimer();
+  exitBrowseMode();
+
+  currentFen=fen; playerColor=color; difficulty=diff; timeControl=tc||'none';
 
   game=new Chess(fen);
   selectedSq=null; legalMoves=[]; lastMove=null; moveHistory=[];
   isThinking=false; pendingPromo=null;
 
-  // Reset toggles — hints ON by default, eval OFF
+  // Setup timers
+  const cfg=TC_CONFIG[timeControl]||TC_CONFIG['none'];
+  playerTimeMs=cfg.initialMs;
+  compTimeMs=cfg.initialMs;
+  incrementMs=cfg.incrementMs;
+
+  // Reset toggles
   showHints=true; showEval=false;
   document.getElementById('btn-hints').textContent='Hide Moves';
   document.getElementById('btn-hints').classList.add('active-toggle');
@@ -1035,8 +1073,12 @@ function startGame(fen, color, diff){
   const isWhite=playerColor==='white';
   document.getElementById('top-pip').style.background=isWhite?'#1e1e1e':'#e8d5a0';
   document.getElementById('bot-pip').style.background=isWhite?'#e8d5a0':'#1e1e1e';
-  document.getElementById('top-name').textContent=`Computer (${difficulty[0].toUpperCase()+difficulty.slice(1)})`;
+  const diffLabel=diff[0].toUpperCase()+diff.slice(1);
+  document.getElementById('top-name').textContent=`Computer (${diffLabel})`;
   document.getElementById('bot-name').textContent='You';
+
+  // Timer display
+  updateTimerDisplay();
 
   showScreen('game-screen');
   renderBoard();
@@ -1044,23 +1086,163 @@ function startGame(fen, color, diff){
   updateEvalBar();
   updateStatus();
 
-  // Computer goes first if player is Black
   const playerTurn=playerColor==='white'?W:B;
-  if(game.turn!==playerTurn) setTimeout(doComputerMove,500);
+  if(game.turn===playerTurn){
+    startPlayerTimer();
+  } else {
+    startCompTimer();
+    setTimeout(doComputerMove,THINK_DELAY[difficulty]||1000);
+  }
 }
 
 // ════════════════════════════════════════════════════════════
-//  RESTART  — same position, same colour, same difficulty
+//  RESTART
 // ════════════════════════════════════════════════════════════
 function restartGame(){
   document.getElementById('result-overlay').classList.remove('active');
-  if(currentFen) startGame(currentFen, playerColor, difficulty);
+  if(currentFen)startGame(currentFen,playerColor,difficulty,timeControl);
 }
 
 // ════════════════════════════════════════════════════════════
-//  RENDER BOARD
+//  HISTORY BROWSING
+// ════════════════════════════════════════════════════════════
+function enterBrowseMode(idx){
+  // idx is the move index (0-based) in moveHistory we want to show
+  if(moveHistory.length===0)return;
+  idx=Math.max(0,Math.min(idx,moveHistory.length-1));
+  browseIdx=idx;
+  stopTimer(); // pause timer while browsing
+
+  // Replay to that point
+  browseGame=new Chess(currentFen);
+  for(let i=0;i<=browseIdx;i++){
+    const m=moveHistory[i];
+    if(m.from&&m.to)browseGame.move({from:m.from,to:m.to,promotion:m.promo||'q'});
+  }
+
+  document.getElementById('chessboard').classList.add('browsing');
+  document.getElementById('browse-hint').style.display='block';
+  renderBrowseBoard();
+  updateMoveListHighlight();
+}
+
+function exitBrowseMode(){
+  browseIdx=-1;
+  browseGame=null;
+  const cb=document.getElementById('chessboard');
+  if(cb)cb.classList.remove('browsing');
+  const bh=document.getElementById('browse-hint');
+  if(bh)bh.style.display='none';
+  updateMoveListHighlight();
+  // Re-render live board if game exists
+  if(game){
+    renderBoard();
+    const playerTurn=playerColor==='white'?W:B;
+    if(!game.isGameOver()&&!isThinking){
+      if(game.turn===playerTurn)startPlayerTimer();
+      // (don't restart comp timer — computer isn't mid-move while browsing)
+    }
+  }
+}
+
+function isBrowsing(){return browseIdx>=0;}
+
+function onHistoryCardClick(e){
+  // Only handle clicks on move-san spans
+  const span=e.target.closest('.move-san');
+  if(!span)return;
+  const idx=parseInt(span.dataset.moveIdx);
+  if(isNaN(idx))return;
+  enterBrowseMode(idx);
+}
+
+function renderBrowseBoard(){
+  if(!browseGame)return;
+  const board=document.getElementById('chessboard');
+  board.innerHTML='';
+  const flipped=playerColor==='black';
+  const m=moveHistory[browseIdx];
+  const browseFrom=m?m.from:null;
+  const browseTo=m?m.to:null;
+
+  for(let row=0;row<8;row++){
+    for(let col=0;col<8;col++){
+      const r=flipped?row:7-row;
+      const c=flipped?7-col:col;
+      const name=FILES[c]+(r+1);
+      const isLight=(r+c)%2!==0;
+      const div=document.createElement('div');
+      div.className='sq '+(isLight?'light':'dark');
+      div.dataset.sq=name;
+
+      if(name===browseFrom)div.classList.add('browse-from');
+      if(name===browseTo)div.classList.add('browse-to');
+
+      if(col===0){const sp=document.createElement('span');sp.className='coord rank';sp.textContent=(r+1);div.appendChild(sp);}
+      if(row===7){const sp=document.createElement('span');sp.className='coord file';sp.textContent=FILES[c];div.appendChild(sp);}
+
+      const p=browseGame.board[sq(c,r)];
+      if(p){const el=document.createElement('div');el.className='piece';el.innerHTML=SVG[pieceKey(p)]||'';div.appendChild(el);}
+
+      // Clicks in browse mode: click anywhere non-history exits
+      div.addEventListener('click',()=>exitBrowseMode());
+      board.appendChild(div);
+    }
+  }
+  renderArrows();
+}
+
+function updateMoveListHighlight(){
+  document.querySelectorAll('.move-san').forEach(el=>{
+    const idx=parseInt(el.dataset.moveIdx);
+    el.classList.toggle('browsed', isBrowsing() && idx===browseIdx);
+  });
+}
+
+// Keyboard navigation — left/right always work on game screen
+document.addEventListener('keydown',e=>{
+  // Only act when game screen is visible and we have moves
+  if(!game||!moveHistory.length)return;
+  if(document.getElementById('game-screen').classList.contains('active')===false)return;
+  // Don't steal keys from inputs
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
+
+  if(e.key==='ArrowLeft'){
+    e.preventDefault();
+    if(isBrowsing()){
+      if(browseIdx>0)enterBrowseMode(browseIdx-1);
+      // already at first move — stay there
+    }else{
+      // Enter browse at the last move
+      enterBrowseMode(moveHistory.length-1);
+    }
+  }else if(e.key==='ArrowRight'){
+    e.preventDefault();
+    if(isBrowsing()){
+      if(browseIdx<moveHistory.length-1)enterBrowseMode(browseIdx+1);
+      else exitBrowseMode(); // at latest move → return to live
+    }
+    // not browsing + right arrow → nothing to do
+  }else if(e.key==='Escape'){
+    if(isBrowsing())exitBrowseMode();
+  }
+});
+
+// Click anywhere outside history card exits browse mode
+document.addEventListener('click',e=>{
+  if(!isBrowsing())return;
+  const card=document.getElementById('history-card');
+  const board=document.getElementById('chessboard');
+  if(card&&!card.contains(e.target)&&board&&!board.contains(e.target)){
+    exitBrowseMode();
+  }
+});
+
+// ════════════════════════════════════════════════════════════
+//  RENDER BOARD  (live position)
 // ════════════════════════════════════════════════════════════
 function renderBoard(){
+  if(isBrowsing()){renderBrowseBoard();return;}
   const board=document.getElementById('chessboard');
   board.innerHTML='';
   const flipped=playerColor==='black';
@@ -1078,7 +1260,7 @@ function renderBoard(){
 
       if(lastMove&&(name===lastMove.from||name===lastMove.to))
         div.classList.add(name===lastMove.from?'last-from':'last-to');
-      if(selectedSq===name) div.classList.add('sel');
+      if(selectedSq===name)div.classList.add('sel');
 
       const isHint=showHints&&legalMoves.some(m=>m.to===name);
       if(isHint){
@@ -1091,185 +1273,122 @@ function renderBoard(){
       if(row===7){const sp=document.createElement('span');sp.className='coord file';sp.textContent=FILES[c];div.appendChild(sp);}
 
       const p=game.board[sq(c,r)];
-      if(p){
-        const el=document.createElement('div');
-        el.className='piece';
-        el.innerHTML=SVG[pieceKey(p)]||'';
-        div.appendChild(el);
-      }
+      if(p){const el=document.createElement('div');el.className='piece';el.innerHTML=SVG[pieceKey(p)]||'';div.appendChild(el);}
 
-      div.addEventListener('click', e=>onSquareClick(e,name));
-      div.addEventListener('mousedown', e=>onDragStart(e,name));
-      div.addEventListener('touchstart', e=>onDragStart(e,name), {passive:false});
+      div.addEventListener('click',e=>onSquareClick(e,name));
+      div.addEventListener('mousedown',e=>onDragStart(e,name));
+      div.addEventListener('touchstart',e=>onDragStart(e,name),{passive:false});
 
       board.appendChild(div);
     }
   }
+  renderArrows();
 }
 
 // ════════════════════════════════════════════════════════════
 //  DRAG STATE
-//  Key fix: track whether a real drag (moved >5px) happened.
-//  If no real drag, treat release as a click — never duplicate.
-//  The click event is suppressed after a real drag.
 // ════════════════════════════════════════════════════════════
 let dragState=null;
 
-function onDragStart(e, name){
-  if(isThinking||pendingPromo||game.isGameOver()) return;
+function onDragStart(e,name){
+  // Right-click is reserved for arrow drawing — never drag pieces with it
+  if(e.button===2)return;
+  if(isBrowsing()){exitBrowseMode();return;}
+  if(isThinking||pendingPromo||game.isGameOver())return;
   const playerTurn=playerColor==='white'?W:B;
-  if(game.turn!==playerTurn) return;
-
+  if(game.turn!==playerTurn)return;
   const p=game.board[parseSq(name)];
-  if(!p||p.c!==playerTurn) return;
-
-  // Only preventDefault on touch to avoid scroll; mouse can default
-  if(e.type==='touchstart') e.preventDefault();
-
+  if(!p||p.c!==playerTurn)return;
+  if(e.type==='touchstart')e.preventDefault();
   const startPos=getEventPos(e);
-
-  dragState={
-    fromName: name,
-    startPos,
-    currentPos: {...startPos},
-    isDragging: false,   // true only once pointer moves >5px
-    cancelled:  false,
-  };
-
-  document.addEventListener('mousemove', onDragMove, {passive:false});
-  document.addEventListener('mouseup',   onDragEnd,  {passive:false});
-  document.addEventListener('touchmove', onDragMove, {passive:false});
-  document.addEventListener('touchend',  onDragEnd,  {passive:false});
+  dragState={fromName:name,startPos,currentPos:{...startPos},isDragging:false,cancelled:false};
+  document.addEventListener('mousemove',onDragMove,{passive:false});
+  document.addEventListener('mouseup',onDragEnd,{passive:false});
+  document.addEventListener('touchmove',onDragMove,{passive:false});
+  document.addEventListener('touchend',onDragEnd,{passive:false});
 }
 
 function onDragMove(e){
-  if(!dragState) return;
-  if(e.type==='touchmove') e.preventDefault();
-
+  if(!dragState)return;
+  if(e.type==='touchmove')e.preventDefault();
   const pos=getEventPos(e);
   dragState.currentPos=pos;
-
   if(!dragState.isDragging){
-    const dx=pos.x-dragState.startPos.x;
-    const dy=pos.y-dragState.startPos.y;
-    if(Math.sqrt(dx*dx+dy*dy)<5) return;  // haven't moved enough yet
-    // Crossed threshold → start visual drag
+    const dx=pos.x-dragState.startPos.x,dy=pos.y-dragState.startPos.y;
+    if(Math.sqrt(dx*dx+dy*dy)<5)return;
     dragState.isDragging=true;
-
-    // Select the piece now (for hint dots)
     selectSq(dragState.fromName);
-
-    // Show ghost
     const ghost=document.getElementById('drag-ghost');
     const p=game.board[parseSq(dragState.fromName)];
     ghost.innerHTML=SVG[pieceKey(p)]||'';
     ghost.style.display='block';
-    ghost.style.left=pos.x+'px';
-    ghost.style.top =pos.y+'px';
-
-    // Hide piece on origin square
+    ghost.style.left=pos.x+'px'; ghost.style.top=pos.y+'px';
     const originEl=document.querySelector(`[data-sq="${dragState.fromName}"]`);
-    if(originEl) originEl.classList.add('dragging-from');
-  } else {
-    // Move ghost
+    if(originEl)originEl.classList.add('dragging-from');
+  }else{
     const ghost=document.getElementById('drag-ghost');
-    ghost.style.left=pos.x+'px';
-    ghost.style.top =pos.y+'px';
+    ghost.style.left=pos.x+'px'; ghost.style.top=pos.y+'px';
   }
 }
 
 function onDragEnd(e){
-  if(!dragState) return;
-
-  document.removeEventListener('mousemove', onDragMove);
-  document.removeEventListener('mouseup',   onDragEnd);
-  document.removeEventListener('touchmove', onDragMove);
-  document.removeEventListener('touchend',  onDragEnd);
-
+  if(!dragState)return;
+  document.removeEventListener('mousemove',onDragMove);
+  document.removeEventListener('mouseup',onDragEnd);
+  document.removeEventListener('touchmove',onDragMove);
+  document.removeEventListener('touchend',onDragEnd);
   const wasDragging=dragState.isDragging;
   const fromName=dragState.fromName;
-
-  // Hide ghost and remove dragging-from class
   const ghost=document.getElementById('drag-ghost');
-  ghost.style.display='none';
-  ghost.innerHTML='';
+  ghost.style.display='none'; ghost.innerHTML='';
   const originEl=document.querySelector(`[data-sq="${fromName}"]`);
-  if(originEl) originEl.classList.remove('dragging-from');
-
+  if(originEl)originEl.classList.remove('dragging-from');
   dragState=null;
-
-  if(!wasDragging){
-    // Short tap, no real drag — the 'click' event will handle it naturally.
-    // Do nothing here; don't duplicate.
-    return;
-  }
-
-  // Real drag ended — find drop target
-  if(e.type==='touchend') e.preventDefault();
+  if(!wasDragging)return;
   const pos=getEventPos(e);
-  const toName=squareAtPoint(pos.x, pos.y);
-
-  if(toName && toName!==fromName){
-    const hit=legalMoves.find(m=>m.to===toName);
-    if(hit){
-      if(hit.flags.includes('p')){
-        pendingPromo={from:fromName,to:toName};
-        showPromo();
-        return;
-      }
-      doPlayerMove(fromName, toName, 'q');
-      return;
-    }
+  const toName=squareAtPoint(pos.x,pos.y);
+  if(!toName){renderBoard();return;}
+  const hit=legalMoves.find(m=>m.to===toName);
+  if(hit){
+    if(hit.flags.includes('p')){pendingPromo={from:fromName,to:toName};showPromo();return;}
+    doPlayerMove(fromName,toName,'q');return;
   }
-  // Dropped on non-legal square or same square → piece returns (just re-render)
-  // Keep selection active so player can click a valid square next
   renderBoard();
 }
 
 function getEventPos(e){
-  if(e.touches&&e.touches.length>0)        return{x:e.touches[0].clientX,       y:e.touches[0].clientY};
-  if(e.changedTouches&&e.changedTouches.length>0) return{x:e.changedTouches[0].clientX, y:e.changedTouches[0].clientY};
-  return{x:e.clientX, y:e.clientY};
+  if(e.touches&&e.touches.length>0)return{x:e.touches[0].clientX,y:e.touches[0].clientY};
+  if(e.changedTouches&&e.changedTouches.length>0)return{x:e.changedTouches[0].clientX,y:e.changedTouches[0].clientY};
+  return{x:e.clientX,y:e.clientY};
 }
-
 function squareAtPoint(x,y){
   const ghost=document.getElementById('drag-ghost');
-  const prev=ghost.style.display;
-  ghost.style.display='none';
-  const el=document.elementFromPoint(x,y);
-  ghost.style.display=prev;
-  if(!el) return null;
-  const s=el.closest('[data-sq]');
-  return s?s.dataset.sq:null;
+  const prev=ghost.style.display;ghost.style.display='none';
+  const el=document.elementFromPoint(x,y);ghost.style.display=prev;
+  if(!el)return null;const s=el.closest('[data-sq]');return s?s.dataset.sq:null;
 }
 
 // ════════════════════════════════════════════════════════════
 //  CLICK INTERACTION
 // ════════════════════════════════════════════════════════════
-function onSquareClick(e, name){
-  // If a real drag just ended, the dragEnd already handled it.
-  // dragState is null by the time click fires, so this is safe.
-  if(isThinking||pendingPromo||game.isGameOver()) return;
+function onSquareClick(e,name){
+  if(e.button===2)return; // right-click is for arrows only
+  if(isBrowsing()){exitBrowseMode();return;}
+  if(isThinking||pendingPromo||game.isGameOver())return;
   const playerTurn=playerColor==='white'?W:B;
-  if(game.turn!==playerTurn) return;
-
+  if(game.turn!==playerTurn)return;
   const p=game.board[parseSq(name)];
-
   if(selectedSq){
-    // Tap selected square again → deselect
-    if(selectedSq===name){
-      selectedSq=null; legalMoves=[];
-      renderBoard(); return;
-    }
+    if(selectedSq===name){selectedSq=null;legalMoves=[];renderBoard();return;}
     const hit=legalMoves.find(m=>m.to===name);
     if(hit){
       if(hit.flags.includes('p')){pendingPromo={from:selectedSq,to:name};showPromo();return;}
-      doPlayerMove(selectedSq,name,'q'); return;
+      doPlayerMove(selectedSq,name,'q');return;
     }
     if(p&&p.c===playerTurn){selectSq(name);return;}
-    selectedSq=null; legalMoves=[]; renderBoard(); return;
+    selectedSq=null;legalMoves=[];renderBoard();return;
   }
-  if(p&&p.c===playerTurn) selectSq(name);
+  if(p&&p.c===playerTurn)selectSq(name);
 }
 
 function selectSq(name){
@@ -1283,30 +1402,42 @@ function selectSq(name){
 // ════════════════════════════════════════════════════════════
 function doPlayerMove(from,to,promo){
   const result=game.move({from,to,promotion:promo});
-  if(!result) return;
+  if(!result)return;
+  stopPlayerTimer();
+  applyIncrement();
   lastMove={from,to};
-  selectedSq=null; legalMoves=[];
-  moveHistory.push(result.san);
+  selectedSq=null;legalMoves=[];
+  moveHistory.push({san:result.san,from,to,promo:promo||null});
   pendingPromo=null;
   document.getElementById('promo-overlay').classList.remove('active');
-  renderBoard(); updateMoveList(); updateStatus(); updateEvalBar();
+  renderBoard();updateMoveList();updateStatus();updateEvalBar();
+  updateTimerDisplay();
   if(game.isGameOver()){setTimeout(showResult,600);return;}
-  setTimeout(doComputerMove,300);
+  // Start computer timer then trigger computer move after think delay
+  startCompTimer();
+  setTimeout(doComputerMove,THINK_DELAY[difficulty]||1000);
 }
 
 function doComputerMove(){
-  if(game.isGameOver()) return;
+  if(game.isGameOver())return;
   const compTurn=playerColor==='white'?B:W;
-  if(game.turn!==compTurn) return;
-  isThinking=true; updateStatus();
+  if(game.turn!==compTurn)return;
+  isThinking=true;updateStatus();updateResignBtn();
   setTimeout(()=>{
     const best=getBestMove(game,difficulty);
     isThinking=false;
-    if(!best){updateStatus();return;}
+    if(!best){stopCompTimer();updateStatus();updateResignBtn();return;}
     const result=game.move({from:best.from,to:best.to,promotion:best.promotion||'q'});
-    if(result){lastMove={from:best.from,to:best.to};moveHistory.push(result.san);renderBoard();updateMoveList();}
-    updateStatus(); updateEvalBar();
-    if(game.isGameOver()) setTimeout(showResult,600);
+    stopCompTimer();
+    if(result){
+      lastMove={from:best.from,to:best.to};
+      moveHistory.push({san:result.san,from:best.from,to:best.to,promo:best.promotion||null});
+      renderBoard();updateMoveList();
+    }
+    updateStatus();updateEvalBar();updateResignBtn();
+    if(game.isGameOver()){setTimeout(showResult,600);return;}
+    // Player's turn — start their timer
+    startPlayerTimer();
   },30);
 }
 
@@ -1315,6 +1446,7 @@ function doComputerMove(){
 // ════════════════════════════════════════════════════════════
 function updateStatus(){
   const el=document.getElementById('status-txt');
+  if(!game){return;}
   if(game.isCheckmate()){el.textContent='Checkmate!';updateResignBtn();return;}
   if(game.isDraw()){el.textContent='Draw';updateResignBtn();return;}
   if(isThinking){el.innerHTML='<span style="color:var(--gold)">Computer thinking…</span>';updateResignBtn();return;}
@@ -1324,15 +1456,22 @@ function updateStatus(){
 }
 
 function updateMoveList(){
-  const el=document.getElementById('move-list');el.innerHTML='';
+  const el=document.getElementById('move-list');
+  el.innerHTML='';
   for(let i=0;i<moveHistory.length;i+=2){
     const pair=document.createElement('div');pair.className='move-pair';
     const num=document.createElement('span');num.className='move-num';num.textContent=(i/2+1)+'.';
-    const w=document.createElement('span');w.className='move-san';w.textContent=moveHistory[i]||'';
-    const b=document.createElement('span');b.className='move-san';b.style.color='var(--cream-dim)';b.textContent=moveHistory[i+1]||'';
+    const w=document.createElement('span');
+    w.className='move-san'; w.textContent=moveHistory[i]?.san||'';
+    w.dataset.moveIdx=i;
+    const b=document.createElement('span');
+    b.className='move-san'; b.style.color='var(--cream-dim)';
+    b.textContent=moveHistory[i+1]?.san||'';
+    b.dataset.moveIdx=i+1;
     pair.append(num,w,b);el.appendChild(pair);
   }
   el.scrollTop=el.scrollHeight;
+  updateMoveListHighlight();
 }
 
 function updateEvalBar(){
@@ -1366,9 +1505,10 @@ function showPromo(){
 //  RESULT
 // ════════════════════════════════════════════════════════════
 function showResult(){
+  stopAllTimers();
   const playerTurn=playerColor==='white'?W:B;
   const title=document.getElementById('r-title');
-  const desc =document.getElementById('r-desc');
+  const desc=document.getElementById('r-desc');
   if(game.isCheckmate()){
     const youWin=game.turn!==playerTurn;
     title.textContent=youWin?'🏆 Victory!':'Defeat';
@@ -1384,53 +1524,36 @@ function showResult(){
 //  RESIGN
 // ════════════════════════════════════════════════════════════
 function onResignClick(e){
-  if(!game||game.isGameOver()||isThinking) return;
+  if(!game||game.isGameOver()||isThinking)return;
   const playerTurn=playerColor==='white'?W:B;
-  if(game.turn!==playerTurn) return; // not your turn, can't resign mid-think
-
-  // Position the small popup near the resign button
+  if(game.turn!==playerTurn)return;
   const popup=document.getElementById('resign-confirm');
   const btn=document.getElementById('resign-btn');
   const rect=btn.getBoundingClientRect();
-
-  // Try to place popup above-left of button; clamp to viewport
-  let top  = rect.top - 10 - 76; // 76 ≈ popup height
-  let left = rect.right - 160;   // 160 ≈ popup width
-
-  // Clamp so it never goes off screen
-  top  = Math.max(8, Math.min(top,  window.innerHeight - 100));
-  left = Math.max(8, Math.min(left, window.innerWidth  - 168));
-
-  popup.style.top  = top  + 'px';
-  popup.style.left = left + 'px';
+  let top=rect.top-10-76,left=rect.right-160;
+  top=Math.max(8,Math.min(top,window.innerHeight-100));
+  left=Math.max(8,Math.min(left,window.innerWidth-168));
+  popup.style.top=top+'px';popup.style.left=left+'px';
   popup.classList.add('active');
-
-  // Close if user clicks anywhere outside the popup
-  setTimeout(()=>document.addEventListener('click', _outsideResignClose, {once:true, capture:true}), 0);
+  setTimeout(()=>document.addEventListener('click',_outsideResignClose,{once:true,capture:true}),0);
 }
-
 function _outsideResignClose(e){
   const popup=document.getElementById('resign-confirm');
-  if(!popup.contains(e.target)) popup.classList.remove('active');
+  if(!popup.contains(e.target))popup.classList.remove('active');
 }
-
-function closeResignConfirm(){
-  document.getElementById('resign-confirm').classList.remove('active');
-}
-
+function closeResignConfirm(){document.getElementById('resign-confirm').classList.remove('active');}
 function confirmResign(){
+  stopAllTimers();
   document.getElementById('resign-confirm').classList.remove('active');
-  // Show defeat result screen
   const title=document.getElementById('r-title');
-  const desc =document.getElementById('r-desc');
+  const desc=document.getElementById('r-desc');
   title.textContent='Resigned';
   desc.textContent='You resigned. Better luck next time!';
   document.getElementById('result-overlay').classList.add('active');
 }
-
 function updateResignBtn(){
   const btn=document.getElementById('resign-btn');
-  if(!btn||!game) return;
+  if(!btn||!game)return;
   const playerTurn=playerColor==='white'?W:B;
   const active=!game.isGameOver()&&!isThinking&&game.turn===playerTurn;
   btn.disabled=!active;
@@ -1439,16 +1562,175 @@ function updateResignBtn(){
 // ════════════════════════════════════════════════════════════
 //  NAVIGATION
 // ════════════════════════════════════════════════════════════
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
 function goHome(){
+  stopAllTimers();
+  exitBrowseMode();
   document.getElementById('result-overlay').classList.remove('active');
   document.getElementById('ng-overlay').classList.remove('active');
   document.getElementById('resign-confirm').classList.remove('active');
   showScreen('home-screen');
 }
-function showScreen(id){
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
+// ════════════════════════════════════════════════════════════
+//  RIGHT-CLICK ARROW DRAWING
+//  Right-drag from square A → square B draws an arrow.
+//  Same square = no arrow. Left click on board = clear all arrows.
+//  Arrows persist until cleared and survive browse mode.
+// ════════════════════════════════════════════════════════════
+let arrows = [];          // [{from:'e2',to:'e4'}]
+let arrowDrag = null;     // {fromSq, fromCenter}
+
+function sqCenter(sqName) {
+  // Returns {cx,cy} in SVG viewBox coords (0–8 space, matching viewBox="0 0 8 8")
+  const flipped = playerColor === 'black';
+  const file = FILES.indexOf(sqName[0]);
+  const rank = parseInt(sqName[1]) - 1;
+  const col = flipped ? 7 - file : file;
+  const row = flipped ? rank : 7 - rank;
+  return { cx: col + 0.5, cy: row + 0.5 };
 }
+
+function sqFromPoint(clientX, clientY) {
+  // Find which square a screen point is over (using the board element)
+  const boardEl = document.getElementById('chessboard');
+  if (!boardEl) return null;
+  const rect = boardEl.getBoundingClientRect();
+  const sqSize = rect.width / 8;
+  const col = Math.floor((clientX - rect.left) / sqSize);
+  const row = Math.floor((clientY - rect.top)  / sqSize);
+  if (col < 0 || col > 7 || row < 0 || row > 7) return null;
+  const flipped = playerColor === 'black';
+  const file = flipped ? 7 - col : col;
+  const rank = flipped ? row : 7 - row;
+  return FILES[file] + (rank + 1);
+}
+
+function arrowKey(from, to) { return from + to; }
+
+function renderArrows() {
+  const g = document.getElementById('arrow-group');
+  if (!g) return;
+  g.innerHTML = '';
+  for (const a of arrows) {
+    const f = sqCenter(a.from), t = sqCenter(a.to);
+    const dx = t.cx - f.cx, dy = t.cy - f.cy;
+    const len = Math.sqrt(dx*dx + dy*dy);
+    if (len < 0.01) continue;
+    // Shorten the end slightly so arrowhead sits nicely
+    const shorten = 0.35;
+    const ex = t.cx - (dx/len)*shorten;
+    const ey = t.cy - (dy/len)*shorten;
+    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1', f.cx); line.setAttribute('y1', f.cy);
+    line.setAttribute('x2', ex);   line.setAttribute('y2', ey);
+    line.setAttribute('stroke', 'rgba(255,170,0,0.9)');
+    line.setAttribute('stroke-width', '0.22');
+    line.setAttribute('stroke-linecap', 'round');
+    line.setAttribute('marker-end', 'url(#arrowhead)');
+    line.style.pointerEvents = 'none';
+    g.appendChild(line);
+  }
+}
+
+function clearArrows() {
+  arrows = [];
+  renderArrows();
+  const preview = document.getElementById('arrow-preview');
+  if (preview) preview.style.display = 'none';
+}
+
+// Hook onto the board wrapper div for right-click drag
+document.addEventListener('mousedown', e => {
+  if (e.button !== 2) return;
+  const boardEl = document.getElementById('chessboard');
+  if (!boardEl) return;
+  const sq = sqFromPoint(e.clientX, e.clientY);
+  if (!sq) return;
+  e.preventDefault();
+  arrowDrag = { fromSq: sq };
+
+  // Show preview line starting at center of from-square
+  const preview = document.getElementById('arrow-preview');
+  const f = sqCenter(sq);
+  if (preview) {
+    preview.setAttribute('x1', f.cx); preview.setAttribute('y1', f.cy);
+    preview.setAttribute('x2', f.cx); preview.setAttribute('y2', f.cy);
+    preview.style.display = 'block';
+  }
+});
+
+document.addEventListener('mousemove', e => {
+  if (!arrowDrag) return;
+  const preview = document.getElementById('arrow-preview');
+  if (!preview) return;
+
+  const boardEl = document.getElementById('chessboard');
+  if (!boardEl) return;
+  const rect = boardEl.getBoundingClientRect();
+  // Convert client coords to SVG viewBox coords
+  const svgX = ((e.clientX - rect.left) / rect.width) * 8;
+  const svgY = ((e.clientY - rect.top)  / rect.height) * 8;
+
+  const f = sqCenter(arrowDrag.fromSq);
+  const dx = svgX - f.cx, dy = svgY - f.cy;
+  const len = Math.sqrt(dx*dx + dy*dy);
+  if (len < 0.3) {
+    preview.style.display = 'none';
+    return;
+  }
+  const shorten = 0.35;
+  const ex = svgX - (dx/len)*shorten;
+  const ey = svgY - (dy/len)*shorten;
+  preview.setAttribute('x1', f.cx); preview.setAttribute('y1', f.cy);
+  preview.setAttribute('x2', ex);   preview.setAttribute('y2', ey);
+  preview.style.display = 'block';
+});
+
+document.addEventListener('mouseup', e => {
+  if (e.button !== 2 || !arrowDrag) return;
+  e.preventDefault();
+
+  const preview = document.getElementById('arrow-preview');
+  if (preview) preview.style.display = 'none';
+
+  const toSq = sqFromPoint(e.clientX, e.clientY);
+  const fromSq = arrowDrag.fromSq;
+  arrowDrag = null;
+
+  if (!toSq || toSq === fromSq) return; // same square = no arrow
+
+  // Toggle: if same arrow already exists, remove it; otherwise add
+  const key = arrowKey(fromSq, toSq);
+  const existing = arrows.findIndex(a => arrowKey(a.from, a.to) === key);
+  if (existing >= 0) {
+    arrows.splice(existing, 1);
+  } else {
+    arrows.push({ from: fromSq, to: toSq });
+  }
+  renderArrows();
+});
+
+// Suppress context menu on the board area
+document.addEventListener('contextmenu', e => {
+  const boardEl = document.getElementById('chessboard');
+  if (!boardEl) return;
+  const sq = sqFromPoint(e.clientX, e.clientY);
+  if (sq) e.preventDefault();
+});
+
+// Left click on board clears all arrows (existing handler calls renderBoard which re-renders,
+// so we just hook into the board mousedown for button 0)
+document.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  const boardEl = document.getElementById('chessboard');
+  if (!boardEl) return;
+  const sq = sqFromPoint(e.clientX, e.clientY);
+  if (sq) clearArrows();
+});
 </script>
 </body>
 </html>
