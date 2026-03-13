@@ -78,7 +78,7 @@ h1 span { color:var(--gold); font-style:italic; }
 .top-btn.danger:hover { border-color:var(--red); color:var(--red); }
 
 /* ── GAME LAYOUT ── */
-.game-layout { display:flex; gap:20px; align-items:flex-start; width:100%; justify-content:center; }
+.game-layout { display:flex; gap:20px; align-items:flex-start; width:100%; justify-content:center; touch-action:none; overscroll-behavior:none; }
 .board-wrap { display:flex; flex-direction:column; align-items:center; gap:6px; flex-shrink:0; position:relative; }
 
 /* player labels row: label on left, timer on right */
@@ -116,9 +116,10 @@ h1 span { color:var(--gold); font-style:italic; }
   overflow:hidden;
   user-select:none;
   -webkit-user-select:none;
-  touch-action:none;          /* prevent Safari scroll/zoom during piece drag */
-  -webkit-touch-callout:none; /* suppress long-press callout on iOS */
+  touch-action:none;
+  -webkit-touch-callout:none;
   flex-shrink:0;
+  overscroll-behavior:none;
 }
 /* board in history-browse mode — no dimming, keep full brightness */
 #chessboard.browsing { }
@@ -297,9 +298,23 @@ h1 span { color:var(--gold); font-style:italic; }
   .topbar-btns { -webkit-overflow-scrolling:touch; }
 }
 
-/* Prevent iOS overscroll bounce on the whole page */
-html { height:100%; overflow:hidden; }
-body { height:100%; overflow:auto; -webkit-overflow-scrolling:touch; }
+/* Prevent ALL scroll/bounce/shake on iOS Safari */
+html {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  position: fixed;
+  width: 100%;
+}
+body {
+  height: 100%;
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+}
 </style>
 </head>
 <body>
@@ -1663,6 +1678,7 @@ function doPlayerMove(from,to,promo){
   document.getElementById('promo-overlay').classList.remove('active');
   renderBoard();updateMoveList();updateStatus();updateEvalBar();
   updateTimerDisplay();
+  _lockScroll();
   if(game.isGameOver()){setTimeout(showResult,600);return;}
   // Start computer timer then trigger computer move after think delay
   startCompTimer();
@@ -1684,6 +1700,7 @@ function doComputerMove(){
       lastMove={from:best.from,to:best.to};
       moveHistory.push({san:result.san,from:best.from,to:best.to,promo:best.promotion||null});
       renderBoard();updateMoveList();
+      _lockScroll();
     }
     updateStatus();updateEvalBar();updateResignBtn();
     if(game.isGameOver()){setTimeout(showResult,600);return;}
@@ -1982,6 +1999,25 @@ document.addEventListener('mousedown', e => {
   const sq = sqFromPoint(e.clientX, e.clientY);
   if (sq) clearArrows();
 });
+
+// ── iOS Safari scroll-shake prevention ───────────────────
+// Block any touchmove that would cause the page to scroll.
+// The board's own touchmove already calls preventDefault(), but
+// touches on non-board areas (sidebar, labels) can still trigger
+// Safari's scroll/bounce which causes the visible shake after moves.
+document.addEventListener('touchmove', function(e){
+  // Allow scrolling inside the move-list card only
+  const moveList = document.getElementById('move-list');
+  if(moveList && moveList.contains(e.target)) return;
+  if(e.cancelable) e.preventDefault();
+}, { passive: false });
+
+// After every move the body scroll position can drift on Safari.
+// Reset it to 0 so the board never jumps.
+function _lockScroll(){
+  document.body.scrollTop = 0;
+  document.documentElement.scrollTop = 0;
+}
 </script>
 </body>
 </html>
